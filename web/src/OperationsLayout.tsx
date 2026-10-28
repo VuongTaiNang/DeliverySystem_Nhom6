@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 
 /** Shared Operations shell. Business screens are owned by the respective feature teams. */
-export type OperationsSection = "orders" | "routes" | "settlements";
+export type OperationsSection = "orders" | "routes" | "incidents" | "settlements";
 
 export const operationsItems: { key: OperationsSection; title: string; icon: string }[] = [
   { key: "orders", title: "Đơn hàng", icon: "▤" },
   { key: "routes", title: "Tuyến giao hàng", icon: "↔" },
+  { key: "incidents", title: "Khiếu nại", icon: "!" },
   { key: "settlements", title: "Đối soát COD", icon: "₫" },
 ];
 
@@ -72,7 +73,7 @@ export function OperationsHeader({
   );
 }
 
-/** Reusable container for Operations modules (Orders / Routes / Settlements). */
+/** Reusable container for Operations modules. */
 export default function OperationsLayout({
   section,
   onSectionChange,
