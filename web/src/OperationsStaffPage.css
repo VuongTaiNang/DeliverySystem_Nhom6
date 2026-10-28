@@ -1,0 +1,23 @@
+.ops-staff-page { display:grid; gap:18px; min-width:0; }
+.ops-staff-hero { display:flex; justify-content:space-between; align-items:center; gap:18px; }
+.ops-staff-hero h2 { margin:4px 0 8px; }
+.ops-staff-stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.ops-staff-stats > div { background:#fff; border:1px solid #e0e8e2; border-radius:14px; padding:16px; display:grid; gap:6px; min-width:0; }
+.ops-staff-stats strong { font-size:24px; color:#173c2f; }
+.ops-staff-stats span { color:#6b8178; font-size:13px; }
+.ops-staff-toolbar { display:flex; gap:10px; align-items:center; }
+.ops-staff-toolbar input { flex:1; min-width:0; }
+.ops-staff-table td { vertical-align:middle; }
+.ops-staff-table td:nth-child(3) { min-width:190px; }
+.ops-staff-table td:nth-child(3) span,.ops-staff-table td:nth-child(3) small { display:block; overflow-wrap:anywhere; }
+.ops-staff-table td:nth-child(3) small { color:#71867c; margin-top:3px; }
+.ops-staff-table select { min-width:140px; }
+.ops-staff-modal-backdrop { position:fixed; inset:0; z-index:1000; background:rgba(10,31,24,.48); display:grid; place-items:center; padding:20px; }
+.ops-staff-modal { width:min(720px,100%); max-height:90vh; overflow:auto; }
+.ops-staff-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.ops-staff-form label { display:grid; gap:7px; min-width:0; font-weight:700; color:#294c3e; }
+.ops-staff-form input { width:100%; min-width:0; box-sizing:border-box; }
+.ops-staff-form__wide { grid-column:1/-1; }
+.ops-staff-form__actions { grid-column:1/-1; display:flex; justify-content:flex-end; gap:10px; margin-top:6px; }
+@media(max-width:900px){.ops-staff-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.ops-staff-hero{align-items:flex-start;flex-direction:column}.ops-staff-toolbar{align-items:stretch;flex-direction:column}}
+@media(max-width:600px){.ops-staff-stats{grid-template-columns:1fr}.ops-staff-form{grid-template-columns:1fr}.ops-staff-form__wide,.ops-staff-form__actions{grid-column:auto}}
