@@ -10,6 +10,15 @@ export const operationsItems: { key: OperationsSection; title: string; icon: str
   { key: "settlements", title: "Đối soát COD", icon: "₫" },
 ];
 
+function resolveCurrentSection(fallback: OperationsSection): OperationsSection {
+  if (typeof window === "undefined") return fallback;
+  const path = window.location.pathname.toLowerCase();
+  if (path === "/incidents") return "incidents";
+  if (path === "/operations/routes") return "routes";
+  if (path === "/settlements") return "settlements";
+  return fallback;
+}
+
 export function OperationsSidebar({
   section,
   onSectionChange,
@@ -17,6 +26,16 @@ export function OperationsSidebar({
   section: OperationsSection;
   onSectionChange: (section: OperationsSection) => void;
 }) {
+  const currentSection = resolveCurrentSection(section);
+
+  function handleSection(item: OperationsSection) {
+    if (item === "incidents") {
+      window.location.assign("/incidents");
+      return;
+    }
+    onSectionChange(item);
+  }
+
   return (
     <aside className="sidebar operations-sidebar" aria-label="Thanh điều hướng Operations">
       <div className="brand operations-brand">
@@ -29,9 +48,9 @@ export function OperationsSidebar({
           <button
             key={item.key}
             type="button"
-            className={section === item.key ? "nav active" : "nav"}
-            aria-current={section === item.key ? "page" : undefined}
-            onClick={() => onSectionChange(item.key)}
+            className={currentSection === item.key ? "nav active" : "nav"}
+            aria-current={currentSection === item.key ? "page" : undefined}
+            onClick={() => handleSection(item.key)}
           >
             <span aria-hidden="true">{item.icon}</span>
             {item.title}
@@ -57,11 +76,13 @@ export function OperationsHeader({
   signingOut: boolean;
   onLogout: () => void;
 }) {
+  const currentSection = resolveCurrentSection(section);
+
   return (
     <header className="topbar operations-topbar">
       <div className="operations-header-title">
         <strong>EXPRESS / Operations</strong>
-        <span>{operationsItems.find((item) => item.key === section)?.title}</span>
+        <span>{operationsItems.find((item) => item.key === currentSection)?.title}</span>
       </div>
       <div className="account-controls">
         <span className="operations-username" title={userName}>{userName}</span>
