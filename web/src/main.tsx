@@ -4,6 +4,7 @@ import App from "./App";
 import AccountRoute from "./AccountRoute";
 import OperationsStaffRoute from "./OperationsStaffRoute";
 import AuthGate from "./AuthGate";
+import "./noticeAutoHide.css";
 
 const path = window.location.pathname.toLowerCase();
 
