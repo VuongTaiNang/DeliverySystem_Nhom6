@@ -25,21 +25,15 @@ namespace Back_DeliverySystem
 
             // =====================================================
             // VNPAY CONFIGURATION
-            // Đọc cấu hình từ appsettings.json:
-            //
-            // "VnPay": {
-            //     "PaymentUrl": "...",
-            //     "TmnCode": "...",
-            //     "HashSecret": "...",
-            //     "ReturnUrl": "...",
-            //     "IpnUrl": "..."
-            // }
             // =====================================================
             builder.Services.Configure<VnPayOptions>(
                 builder.Configuration.GetSection("VnPay")
             );
 
             builder.Services.AddScoped<IVnPayService, VnPayService>();
+
+            // Tự động phân Staff theo phường/xã/đặc khu và tải hiện tại.
+            builder.Services.AddScoped<IAutoAssignmentService, AutoAssignmentService>();
 
 
             // =====================================================
