@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { request } from "../lib/http";
 import "./MapLocationPicker.css";
 
 export type MapCoordinate = {
@@ -16,10 +17,10 @@ type Props = {
   color?: string;
 };
 
-type NominatimResult = {
-  lat: string;
-  lon: string;
-  display_name: string;
+type GeocodingResult = {
+  latitude: number;
+  longitude: number;
+  displayName?: string;
 };
 
 const DEFAULT_CENTER: L.LatLngExpression = [10.7769, 106.7009];
@@ -132,38 +133,13 @@ export default function MapLocationPicker({
     setSearchError("");
 
     try {
-      const params = new URLSearchParams({
-        q: keyword,
-        format: "jsonv2",
-        limit: "1",
-        countrycodes: "vn",
-        "accept-language": "vi",
-      });
-
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+      const result = await request<GeocodingResult>(
+        `/geocoding/search?q=${encodeURIComponent(keyword)}`,
       );
 
-      if (!response.ok) {
-        throw new Error("Không thể tìm địa chỉ.");
-      }
-
-      const data =
-        (await response.json()) as NominatimResult[];
-
-      if (data.length === 0) {
-        setSearchError(
-          "Không tìm thấy địa chỉ. Hãy nhập địa chỉ chi tiết hơn.",
-        );
-        return;
-      }
-
-      const latitude = Number(data[0].lat);
-      const longitude = Number(data[0].lon);
-
       const coordinate = {
-        latitude: Number(latitude.toFixed(7)),
-        longitude: Number(longitude.toFixed(7)),
+        latitude: Number(result.latitude.toFixed(7)),
+        longitude: Number(result.longitude.toFixed(7)),
       };
 
       onChangeRef.current(coordinate);
