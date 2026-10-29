@@ -36,6 +36,16 @@ public class ShipmentInput
     public string PickupAddress { get; set; } = string.Empty;
 
 
+    // Khu vực hành chính chuẩn hóa: phường/xã/đặc khu.
+    // Tạm thời nullable để không phá client cũ; UI mới sẽ bắt buộc chọn.
+    [Range(
+        1,
+        int.MaxValue,
+        ErrorMessage = "Khu vực lấy hàng không hợp lệ."
+    )]
+    public int? PickupAreaId { get; set; }
+
+
     // =====================================================
     // TỌA ĐỘ ĐIỂM LẤY HÀNG
     // =====================================================
@@ -88,6 +98,15 @@ public class ShipmentInput
             "Địa chỉ giao hàng phải từ 3 đến 500 ký tự."
     )]
     public string DeliveryAddress { get; set; } = string.Empty;
+
+
+    // Đây là AreaId dùng để tự động phân Staff.
+    [Range(
+        1,
+        int.MaxValue,
+        ErrorMessage = "Khu vực giao hàng không hợp lệ."
+    )]
+    public int? DeliveryAreaId { get; set; }
 
 
     // =====================================================
