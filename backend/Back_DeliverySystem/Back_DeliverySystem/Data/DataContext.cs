@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Staff> Staffs => Set<Staff>();
+    public DbSet<Area> Areas => Set<Area>();
+    public DbSet<StaffArea> StaffAreas => Set<StaffArea>();
 
     public DbSet<Payment> Payments { get; set; }
     public DbSet<DeliveryRating> DeliveryRatings { get; set; }
@@ -45,6 +47,7 @@ public class AppDbContext : DbContext
                 .HasMaxLength(20)
                 .IsRequired();
 
+            // Trường cũ giữ lại để tương thích UI hiện tại.
             entity.Property(x => x.Area)
                 .HasMaxLength(100);
 
@@ -65,6 +68,56 @@ public class AppDbContext : DbContext
                 .WithOne()
                 .HasForeignKey<Staff>(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // =========================================================
+        // AREA - PHƯỜNG / XÃ / ĐẶC KHU
+        // =========================================================
+        modelBuilder.Entity<Area>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Code)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(x => x.Name)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(x => x.Type)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.HasIndex(x => x.Code)
+                .IsUnique();
+
+            entity.HasIndex(x => x.Name);
+        });
+
+        // =========================================================
+        // STAFF AREA + CAPACITY
+        // =========================================================
+        modelBuilder.Entity<StaffArea>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.HasIndex(x => new
+            {
+                x.StaffId,
+                x.AreaId
+            })
+            .IsUnique();
+
+            entity.HasOne(x => x.Staff)
+                .WithMany(x => x.StaffAreas)
+                .HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Area)
+                .WithMany(x => x.StaffAreas)
+                .HasForeignKey(x => x.AreaId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // =========================================================
@@ -93,6 +146,19 @@ public class AppDbContext : DbContext
                 .WithOne()
                 .HasForeignKey(x => x.ShipmentId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<Area>()
+                .WithMany()
+                .HasForeignKey(x => x.PickupAreaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<Area>()
+                .WithMany()
+                .HasForeignKey(x => x.DeliveryAreaId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.PickupAreaId);
+            entity.HasIndex(x => x.DeliveryAreaId);
         });
 
         // =========================================================
