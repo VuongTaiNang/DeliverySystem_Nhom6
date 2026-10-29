@@ -16,7 +16,9 @@ public class Shipment
     public string PickupAddress { get; set; } =
         string.Empty;
 
-    // T?a ?? ?i?m l?y h�ng
+    // Khu vực chuẩn hóa theo phường/xã/đặc khu.
+    public int? PickupAreaId { get; set; }
+
     public double? PickupLatitude { get; set; }
 
     public double? PickupLongitude { get; set; }
@@ -31,7 +33,9 @@ public class Shipment
     public string DeliveryAddress { get; set; } =
         string.Empty;
 
-    // T?a ?? ?i?m giao h�ng
+    // Khu vực dùng làm khóa chính để tự động phân Staff.
+    public int? DeliveryAreaId { get; set; }
+
     public double? DeliveryLatitude { get; set; }
 
     public double? DeliveryLongitude { get; set; }
