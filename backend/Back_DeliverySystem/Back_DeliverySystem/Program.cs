@@ -18,7 +18,10 @@ namespace Back_DeliverySystem
             // =====================================================
             // CONTROLLERS
             // =====================================================
-            builder.Services.AddControllers();
+            builder.Services.AddControllers(options =>
+            {
+                options.Filters.AddService<ShipmentAutoAssignmentFilter>();
+            });
 
             builder.Services.AddOpenApi();
 
@@ -34,6 +37,7 @@ namespace Back_DeliverySystem
 
             // Tự động phân Staff theo phường/xã/đặc khu và tải hiện tại.
             builder.Services.AddScoped<IAutoAssignmentService, AutoAssignmentService>();
+            builder.Services.AddScoped<ShipmentAutoAssignmentFilter>();
 
 
             // =====================================================
