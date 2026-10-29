@@ -10,7 +10,8 @@
         // Mã nhân viên, ví dụ STF0001
         public string EmployeeCode { get; set; } = string.Empty;
 
-        // Khu vực đang phụ trách
+        // Trường cũ giữ lại để tương thích UI hiện tại.
+        // Phân vùng chính thức mới dùng StaffAreas.
         public string? Area { get; set; }
 
         // available / busy / inactive
@@ -21,5 +22,8 @@
 
         public DateTime CreatedAt { get; set; } =
             DateTime.UtcNow;
+
+        // Một Staff có thể phụ trách nhiều phường/xã/đặc khu.
+        public List<StaffArea> StaffAreas { get; set; } = new();
     }
 }
