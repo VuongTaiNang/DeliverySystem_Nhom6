@@ -9,8 +9,13 @@
 
         public int StaffId { get; set; }
 
-        // User có role operations đã phân công
-        public int AssignedByUserId { get; set; }
+        // Manual assignment: operations user id.
+        // Auto assignment: null because the system made the decision.
+        public int? AssignedByUserId { get; set; }
+
+        // manual / auto
+        public string AssignmentSource { get; set; } =
+            "manual";
 
         public DateTime AssignedAt { get; set; } =
             DateTime.UtcNow;
