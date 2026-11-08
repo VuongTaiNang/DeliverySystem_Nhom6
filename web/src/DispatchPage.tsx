@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { money, STATUS, MOCK_MODE } from "./api";
+import { money, STATUS, EVENT_STATUS, MOCK_MODE } from "./api";
 import type { Shipment, Status } from "./api";
 import { request } from "./lib/http";
 import "./DispatchPage.css";
@@ -1466,7 +1466,7 @@ const [cancelReason, setCancelReason] = useState("");
                             className={`badge ${evt.status}`}
                             style={{ marginRight: "10px", fontSize: "10px" }}
                           >
-                            {STATUS[evt.status as Status] || evt.status}
+                            {EVENT_STATUS[evt.status as keyof typeof EVENT_STATUS] || evt.status}
                           </span>
                           <span>{evt.note}</span>
                         </div>
