@@ -18,6 +18,12 @@ export const STATUS = {
 
 export type Status = keyof typeof STATUS;
 
+export const EVENT_STATUS: Record<Status | "arrived_at_pickup" | "arrived_at_delivery", string> = {
+  ...STATUS,
+  arrived_at_pickup: "Nhân viên đã đến điểm lấy hàng",
+  arrived_at_delivery: "Nhân viên đã đến điểm giao hàng",
+};
+
 export type FeePayer = "shop_prepaid" | "recipient" | "deduct_cod";
 
 export interface ServiceArea {
@@ -61,7 +67,7 @@ export interface Quote {
 }
 
 export interface TrackingEvent {
-  status: Status;
+  status: Status | "arrived_at_pickup" | "arrived_at_delivery";
   at: string;
   note: string;
 }
