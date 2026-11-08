@@ -24,6 +24,8 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Ứng dụng sử dụng vị trí khi Staff mở chi tiết đơn và đang thực hiện lấy hoặc giao hàng để tự động ghi nhận sự kiện đến điểm.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
