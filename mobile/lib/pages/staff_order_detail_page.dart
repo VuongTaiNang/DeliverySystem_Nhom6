@@ -130,7 +130,7 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
         )),
       );
     } finally {
-      // Let the dialog's closing animation finish before disposing its controller.
+      // Chờ hiệu ứng đóng hộp thoại hoàn tất rồi mới giải phóng bộ điều khiển.
       await Future<void>.delayed(const Duration(milliseconds: 250));
       controller.dispose();
     }
@@ -178,7 +178,7 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
   Widget build(BuildContext context) {
     final shipmentStatus = _field('shipmentStatus').trim().toLowerCase();
     final assignmentStatus = _field('assignmentStatus').trim().toLowerCase();
-    // Use shipment status for actions; fallback while shipment is pending_pickup.
+    // Ưu tiên dùng trạng thái Shipment để xác định thao tác; dùng trạng thái phân công dự phòng khi Shipment còn chờ lấy hàng.
     final status = shipmentStatus == 'pending_pickup' &&
         (assignmentStatus == 'assigned' || assignmentStatus == 'accepted')
           ? assignmentStatus
