@@ -63,8 +63,8 @@ public sealed class StaffGeofenceController : ControllerBase
             return BadRequest(new { message = "Giai đoạn Geofence không hợp lệ." });
         }
 
-        // Serializable + duplicate check bảo vệ trường hợp nhiều GPS callback
-        // gửi cùng một sự kiện gần như đồng thời.
+        // Giao dịch tuần tự hóa kết hợp kiểm tra trùng lặp để bảo vệ trường hợp
+        // nhiều lần cập nhật GPS gửi cùng một sự kiện gần như đồng thời.
         await using var transaction = await _db.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
