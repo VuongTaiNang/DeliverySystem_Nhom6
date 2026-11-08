@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../services/staff_api_service.dart';
+import '../services/geofence_service.dart';
 
 class StaffOrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -12,6 +15,8 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
   static const _green = Color(0xFF123F31);
   bool _busy = false;
   String? _error;
+  String? _geofenceStatus;
+  GeofenceService? _geofenceService;
   static const _actions = <String, List<List<String>>>{
     'assigned': [['accept', 'Nhận đơn'], ['reject', 'Từ chối']],
     'accepted': [['start-pickup', 'Bắt đầu lấy hàng']],
@@ -35,6 +40,70 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
   };
 
   String _field(String name) => (widget.order[name] ?? '').toString();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startGeofence());
+  }
+
+  double? _coordinate(String key) {
+    final value = widget.order[key];
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  void _startGeofence() {
+    final shipmentStatus = _field('shipmentStatus').trim().toLowerCase();
+    final GeofenceStage? stage = switch (shipmentStatus) {
+      'picking_up' => GeofenceStage.pickup,
+      'delivering' => GeofenceStage.delivery,
+      _ => null,
+    };
+    if (stage == null) return;
+
+    final latitude = _coordinate(
+      stage == GeofenceStage.pickup ? 'pickupLatitude' : 'deliveryLatitude',
+    );
+    final longitude = _coordinate(
+      stage == GeofenceStage.pickup ? 'pickupLongitude' : 'deliveryLongitude',
+    );
+    if (latitude == null || longitude == null ||
+        !latitude.isFinite || !longitude.isFinite ||
+        latitude.abs() > 90 || longitude.abs() > 180 ||
+        (latitude == 0 && longitude == 0)) {
+      setState(() => _geofenceStatus =
+          'Shipment chưa có tọa độ hợp lệ cho ${stage == GeofenceStage.pickup ? 'điểm lấy hàng' : 'điểm giao hàng'}.');
+      return;
+    }
+
+    final rawId = widget.order['assignmentId'];
+    final assignmentId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+    if (assignmentId == null || assignmentId <= 0) {
+      setState(() => _geofenceStatus = 'Không tìm thấy mã phân công để bật Geofence.');
+      return;
+    }
+
+    final service = GeofenceService();
+    _geofenceService = service;
+    service.start(
+      assignmentId: assignmentId,
+      target: GeofenceTarget(
+        stage: stage,
+        latitude: latitude,
+        longitude: longitude,
+      ),
+      onStatus: (message) {
+        if (mounted) setState(() => _geofenceStatus = message);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_geofenceService?.stop() ?? Future<void>.value());
+    super.dispose();
+  }
 
   Future<String?> _askReason() async {
     final controller = TextEditingController();
@@ -136,6 +205,17 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
             if (_field('notes').isNotEmpty) Text('Ghi chú: ${_field('notes')}'),
           ]),
         )),
+        if (_geofenceStatus != null) Card(
+          color: const Color(0xFFEAF3EF),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.my_location, color: _green),
+              const SizedBox(width: 10),
+              Expanded(child: Text(_geofenceStatus!)),
+            ]),
+          ),
+        ),
         if (_error != null) Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Text(_error!, style: const TextStyle(color: Colors.red)),
