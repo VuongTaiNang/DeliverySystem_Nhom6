@@ -84,7 +84,7 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
       return;
     }
 
-    final service = GeofenceService();
+    final service = _geofenceService ?? GeofenceService();
     _geofenceService = service;
     service.start(
       assignmentId: assignmentId,
@@ -150,6 +150,19 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
       if (id == null) throw Exception('Thiếu mã phân công của đơn hàng.');
       await StaffApiService.performPath(action, id, reason: reason);
       if (!mounted) return;
+
+      if (action == 'start-pickup' || action == 'start-delivery') {
+        setState(() {
+          widget.order['shipmentStatus'] =
+              action == 'start-pickup' ? 'picking_up' : 'delivering';
+        });
+        _startGeofence();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã bắt đầu công việc. Geofence đang được bật.')),
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cập nhật đơn hàng thành công')),
       );
