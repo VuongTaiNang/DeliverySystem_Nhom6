@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { api, money, STATUS } from "./api";
+import { api, money, STATUS, EVENT_STATUS } from "./api";
 import type { PickupLocation, Quote, ServiceArea, Shipment, ShipmentInput } from "./api";
 import "./App.css";
 import IncidentPanel from "./IncidentPanel";
@@ -1221,7 +1221,7 @@ function Badge({ shipment }: {
 
               <ol className="timeline">
                 {selected.events.map((event, index) => (<li key={`${event.at}-${index}`}>
-                    <strong>{STATUS[event.status]}</strong>
+                    <strong>{EVENT_STATUS[event.status] || event.status}</strong>
                     <time>{new Date(event.at).toLocaleString("vi-VN")}</time>
                     {event.note && <p>{event.note}</p>}
                   </li>))}
