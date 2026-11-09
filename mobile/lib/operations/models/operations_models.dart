@@ -342,6 +342,7 @@ class OperationArea {
   final int availableCapacity;
   final int waitingAssignments;
   final bool hasCapacityAlert;
+  final List<OperationAreaStaff> staff;
 
   OperationArea({
     required this.id,
@@ -355,9 +356,11 @@ class OperationArea {
     this.availableCapacity = 0,
     this.waitingAssignments = 0,
     this.hasCapacityAlert = false,
+    this.staff = const [],
   });
 
   factory OperationArea.fromJson(Map<String, dynamic> json) {
+    final rawStaff = json['staff'];
     return OperationArea(
       id: json['id'] is int
           ? json['id'] as int
@@ -382,6 +385,63 @@ class OperationArea {
           ? json['waitingAssignments'] as int
           : int.tryParse(json['waitingAssignments']?.toString() ?? '0') ?? 0,
       hasCapacityAlert: json['hasCapacityAlert'] == true,
+      staff: rawStaff is List
+          ? rawStaff
+              .whereType<Map>()
+              .map((e) => OperationAreaStaff.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+}
+
+class OperationAreaStaff {
+  final int staffAreaId;
+  final int staffId;
+  final String employeeCode;
+  final String staffStatus;
+  final bool staffAvailable;
+  final int maxActiveOrders;
+  final int activeOrders;
+  final double utilization;
+  final bool isFull;
+  final bool isActive;
+
+  OperationAreaStaff({
+    required this.staffAreaId,
+    required this.staffId,
+    required this.employeeCode,
+    required this.staffStatus,
+    required this.staffAvailable,
+    required this.maxActiveOrders,
+    required this.activeOrders,
+    required this.utilization,
+    required this.isFull,
+    required this.isActive,
+  });
+
+  factory OperationAreaStaff.fromJson(Map<String, dynamic> json) {
+    return OperationAreaStaff(
+      staffAreaId: json['staffAreaId'] is int
+          ? json['staffAreaId'] as int
+          : int.tryParse(json['staffAreaId']?.toString() ?? '0') ?? 0,
+      staffId: json['staffId'] is int
+          ? json['staffId'] as int
+          : int.tryParse(json['staffId']?.toString() ?? '0') ?? 0,
+      employeeCode: json['employeeCode']?.toString() ?? '',
+      staffStatus: json['staffStatus']?.toString() ?? '',
+      staffAvailable: json['staffAvailable'] == true || json['staffAvailable']?.toString() == 'true',
+      maxActiveOrders: json['maxActiveOrders'] is int
+          ? json['maxActiveOrders'] as int
+          : int.tryParse(json['maxActiveOrders']?.toString() ?? '10') ?? 10,
+      activeOrders: json['activeOrders'] is int
+          ? json['activeOrders'] as int
+          : int.tryParse(json['activeOrders']?.toString() ?? '0') ?? 0,
+      utilization: json['utilization'] is num
+          ? (json['utilization'] as num).toDouble()
+          : double.tryParse(json['utilization']?.toString() ?? '0') ?? 0.0,
+      isFull: json['isFull'] == true,
+      isActive: json['isActive'] == true || json['isActive']?.toString() == 'true',
     );
   }
 }

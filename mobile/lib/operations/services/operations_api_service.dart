@@ -424,5 +424,35 @@ class OperationsApiService {
 
     throw Exception(data['message'] ?? 'Cập nhật khu vực thất bại.');
   }
+
+  // ===================================================================
+  // 6d. PUT /api/v1/operations/areas/{areaId}/staff/{staffId}
+  // Phân khu vực phụ trách cho Staff (Cập nhật maxActiveOrders & isActive)
+  // ===================================================================
+  static Future<Map<String, dynamic>> assignStaffToArea({
+    required int areaId,
+    required int staffId,
+    required int maxActiveOrders,
+    required bool isActive,
+  }) async {
+    final clampedOrders = maxActiveOrders.clamp(1, 100);
+    final response = await http
+        .put(
+          Uri.parse('${ApiService.baseUrl}/api/v1/operations/areas/$areaId/staff/$staffId'),
+          headers: _headers(),
+          body: jsonEncode({
+            'maxActiveOrders': clampedOrders,
+            'isActive': isActive,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final data = _decode(response);
+    if (_ok(response)) {
+      return data;
+    }
+
+    throw Exception(data['message'] ?? 'Phân khu vực phụ trách cho nhân viên thất bại.');
+  }
 }
 

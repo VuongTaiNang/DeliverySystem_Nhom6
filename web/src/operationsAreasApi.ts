@@ -65,3 +65,30 @@ export async function updateOperationsArea(id: number, input: SaveAreaInput): Pr
     }),
   });
 }
+
+export interface SaveStaffAreaInput {
+  maxActiveOrders: number;
+  isActive: boolean;
+}
+
+export interface StaffAreaResult {
+  id: number;
+  areaId: number;
+  staffId: number;
+  maxActiveOrders: number;
+  isActive: boolean;
+}
+
+export async function assignStaffToArea(
+  areaId: number,
+  staffId: number,
+  input: SaveStaffAreaInput
+): Promise<StaffAreaResult> {
+  return request<StaffAreaResult>(`/operations/areas/${areaId}/staff/${staffId}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      maxActiveOrders: Math.min(Math.max(Number(input.maxActiveOrders) || 1, 1), 100),
+      isActive: Boolean(input.isActive),
+    }),
+  });
+}

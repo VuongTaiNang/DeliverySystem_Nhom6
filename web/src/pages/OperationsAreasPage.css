@@ -287,6 +287,195 @@
   padding-top: 16px;
 }
 
+/* Issue #24 - Phân khu vực cho Staff UI Styles */
+.ops-subnav-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #e0e8e2;
+  margin-bottom: 4px;
+}
+
+.ops-subnav-btn {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #668177;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease-in-out;
+}
+
+.ops-subnav-btn:hover {
+  color: #123f31;
+}
+
+.ops-subnav-btn.active {
+  color: #123f31;
+  border-bottom-color: #123f31;
+  font-weight: 700;
+}
+
+.ops-staff-select-card {
+  background: #fff;
+  border: 1px solid #e0e8e2;
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ops-staff-select-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.ops-staff-select-box label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #123f31;
+  white-space: nowrap;
+}
+
+.ops-staff-select-box select {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid #cfdcd5;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.ops-staff-badge-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ops-staff-info-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f7f9f7;
+  border: 1px solid #e0e8e2;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #24483b;
+}
+
+.utilization-wrapper {
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.utilization-track {
+  height: 8px;
+  background: #eef2f0;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.utilization-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.utilization-fill.low {
+  background: #137333;
+}
+
+.utilization-fill.medium {
+  background: #f9ab00;
+}
+
+.utilization-fill.high {
+  background: #d93025;
+}
+
+.utilization-text {
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+}
+
+.max-orders-input {
+  width: 70px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #cfdcd5;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.max-orders-input:focus {
+  border-color: #123f31;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(18, 63, 49, 0.12);
+}
+
+.badge-full {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fce8e6;
+  color: #c5221f;
+  margin-left: 6px;
+}
+
+.btn-toggle-active {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-toggle-active.active {
+  background: #e6f7ec;
+  border: 1px solid #a8dab5;
+  color: #137333;
+}
+
+.btn-toggle-active.inactive {
+  background: #fce8e6;
+  border: 1px solid #f5c2c7;
+  color: #c5221f;
+}
+
+.area-staff-count-btn {
+  background: transparent;
+  border: 1px solid #d0ded6;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: #123f31;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.area-staff-count-btn:hover {
+  background: #eef4f0;
+}
+
 @media (max-width: 900px) {
   .ops-areas-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
