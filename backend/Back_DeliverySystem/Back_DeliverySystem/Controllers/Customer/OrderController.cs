@@ -993,7 +993,15 @@ public class OrderController : ControllerBase
                 .Where(
                     x =>
                         x.ShipmentId ==
-                        shipmentId
+                        shipmentId &&
+                        (currentUser.Role !=
+                            "customer" ||
+                         x.Source ==
+                            "customer") &&
+                        (currentUser.Role !=
+                            "staff" ||
+                         x.Source ==
+                            "staff")
                 )
                 .OrderByDescending(
                     x => x.CreatedAt
@@ -1002,7 +1010,9 @@ public class OrderController : ControllerBase
                 {
                     x.Id,
                     x.ShipmentId,
+                    x.Source,
                     x.Type,
+                    x.Category,
                     x.Content,
                     x.Status,
                     x.Response,
@@ -1100,7 +1110,7 @@ public class OrderController : ControllerBase
             return BadRequest(new
             {
                 message =
-                    "Loại sự cố không hợp lệ."
+                    "Loại khiếu nại không hợp lệ."
             });
         }
 
@@ -1114,7 +1124,7 @@ public class OrderController : ControllerBase
             return BadRequest(new
             {
                 message =
-                    "Nội dung sự cố phải có ít nhất 10 ký tự."
+                    "Nội dung khiếu nại phải có ít nhất 10 ký tự."
             });
         }
 
@@ -1124,7 +1134,7 @@ public class OrderController : ControllerBase
             return BadRequest(new
             {
                 message =
-                    "Nội dung sự cố không được vượt quá 1000 ký tự."
+                    "Nội dung khiếu nại không được vượt quá 1000 ký tự."
             });
         }
 
@@ -1138,6 +1148,9 @@ public class OrderController : ControllerBase
                 CustomerId =
                     currentUser.Id,
 
+                Source =
+                    "customer",
+
                 Type =
                     type,
 
@@ -1148,7 +1161,31 @@ public class OrderController : ControllerBase
                     "pending",
 
                 CreatedAt =
-                    DateTime.UtcNow
+                    DateTime.UtcNow,
+
+                History =
+                {
+                    new ComplaintHistory
+                    {
+                        Action =
+                            "created",
+
+                        ToStatus =
+                            "pending",
+
+                        Note =
+                            "Khách hàng gửi khiếu nại",
+
+                        ActorUserId =
+                            currentUser.Id,
+
+                        ActorRole =
+                            "customer",
+
+                        CreatedAt =
+                            DateTime.UtcNow
+                    }
+                }
             };
 
 
@@ -1166,7 +1203,9 @@ public class OrderController : ControllerBase
             {
                 complaint.Id,
                 complaint.ShipmentId,
+                complaint.Source,
                 complaint.Type,
+                complaint.Category,
                 complaint.Content,
                 complaint.Status,
                 complaint.Response,
@@ -1184,11 +1223,33 @@ public class OrderController : ControllerBase
     [HttpGet("complaints")]
     [Authorize(Roles = "operations")]
     public async Task<IActionResult>
-        GetAllComplaints()
+        GetAllComplaints(
+            [FromQuery] string? source)
     {
-        var complaints =
-            await _db.Complaints
+        var query =
+            _db.Complaints
                 .AsNoTracking()
+                .AsQueryable();
+
+
+        if (!string.IsNullOrWhiteSpace(
+                source))
+        {
+            var src =
+                source.Trim()
+                    .ToLowerInvariant();
+
+            query =
+                query.Where(
+                    x =>
+                        x.Source ==
+                        src
+                );
+        }
+
+
+        var complaints =
+            await query
                 .OrderByDescending(
                     x => x.CreatedAt
                 )
@@ -1196,7 +1257,9 @@ public class OrderController : ControllerBase
                 {
                     x.Id,
                     x.ShipmentId,
+                    x.Source,
                     x.Type,
+                    x.Category,
                     x.Content,
                     x.Status,
                     x.Response,
@@ -1238,7 +1301,7 @@ public class OrderController : ControllerBase
             return NotFound(new
             {
                 message =
-                    "Không tìm thấy báo cáo sự cố."
+                    "Không tìm thấy khiếu nại."
             });
         }
 
@@ -1323,8 +1386,21 @@ public class OrderController : ControllerBase
         }
 
 
+        var fromStatus =
+            complaint.Status;
+
+        var actorId =
+            GetCurrentUserId();
+
+
         complaint.Status =
             status;
+
+        complaint.HandledByUserId =
+            actorId;
+
+        complaint.UpdatedAt =
+            DateTime.UtcNow;
 
 
         if (status ==
@@ -1349,6 +1425,37 @@ public class OrderController : ControllerBase
         }
 
 
+        // Lưu lịch sử xử lý (ghi chú không bị mất khi đổi trạng thái)
+        _db.ComplaintHistories.Add(
+            new ComplaintHistory
+            {
+                ComplaintId =
+                    complaint.Id,
+
+                Action =
+                    status,
+
+                FromStatus =
+                    fromStatus,
+
+                ToStatus =
+                    status,
+
+                Note =
+                    response,
+
+                ActorUserId =
+                    actorId,
+
+                ActorRole =
+                    "operations",
+
+                CreatedAt =
+                    DateTime.UtcNow
+            }
+        );
+
+
         await _db.SaveChangesAsync();
 
 
@@ -1356,7 +1463,9 @@ public class OrderController : ControllerBase
         {
             complaint.Id,
             complaint.ShipmentId,
+            complaint.Source,
             complaint.Type,
+            complaint.Category,
             complaint.Content,
             complaint.Status,
             complaint.Response,

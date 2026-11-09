@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Back_DeliverySystem.DTOs.Staff;
 
 namespace Back_DeliverySystem.Controllers
 {
@@ -1299,5 +1300,102 @@ namespace Back_DeliverySystem.Controllers
                 }
             });
         }
+        // =====================================================
+        // STAFF BÁO CÁO SỰ CỐ
+        // POST /api/v1/staff/assignments/{id}/incidents
+        // =====================================================
+        [HttpPost("assignments/{id:int}/incidents")]
+        public async Task<IActionResult> ReportIncident(
+            int id, [FromBody] CreateIncidentRequest request)
+        {
+            var staff = await GetCurrentStaffAsync();
+            if (staff == null)
+                return Unauthorized(new { message = "Không tìm thấy nhân viên đăng nhập." });
+
+            // Chỉ báo sự cố cho đơn đang được phân công cho chính mình
+            var assignment = await _context.DeliveryAssignments
+                .FirstOrDefaultAsync(x => x.Id == id && x.StaffId == staff.Id);
+            if (assignment == null)
+                return NotFound(new { message = "Không tìm thấy đơn được phân công." });
+            if (!assignment.IsActive)
+                return Conflict(new { message = "Đơn này không còn trong danh sách phụ trách của bạn." });
+
+            var type = request.Type.Trim().ToLowerInvariant();
+            if (!ComplaintRules.StaffIncidentTypes.Contains(type))
+                return BadRequest(new { message = "Loại sự cố không hợp lệ." });
+
+            var description = request.Description.Trim();
+            if (description.Length < 10 || description.Length > 1000)
+                return BadRequest(new { message = "Mô tả sự cố phải từ 10 đến 1000 ký tự." });
+
+            // Chống gửi trùng khi sự cố cùng loại còn đang mở
+            var duplicate = await _context.Complaints.AnyAsync(x =>
+                x.Source == "staff" &&
+                x.ShipmentId == assignment.ShipmentId &&
+                x.ReportedByStaffId == staff.Id &&
+                x.Type == type &&
+                x.Status != "resolved");
+            if (duplicate)
+                return Conflict(new { message = "Bạn đã báo sự cố này cho đơn hàng và đang được xử lý." });
+
+            var incident = new Complaint
+            {
+                ShipmentId = assignment.ShipmentId,
+                AssignmentId = assignment.Id,
+                Source = "staff",
+                CustomerId = null,
+                ReportedByUserId = staff.UserId,
+                ReportedByStaffId = staff.Id,
+                Type = type,
+                Content = description,
+                Status = "pending",
+                CreatedAt = DateTime.UtcNow,
+                History =
+                {
+                    new ComplaintHistory
+                    {
+                        Action = "created",
+                        ToStatus = "pending",
+                        Note = $"Nhân viên {staff.EmployeeCode} báo sự cố",
+                        ActorUserId = staff.UserId,
+                        ActorRole = "staff",
+                        CreatedAt = DateTime.UtcNow
+                    }
+                }
+            };
+
+            _context.Complaints.Add(incident);
+            await _context.SaveChangesAsync();
+
+            return StatusCode(StatusCodes.Status201Created, new
+            {
+                incident.Id, incident.ShipmentId, incident.Source, incident.Type,
+                incident.Content, incident.Status, incident.Response,
+                incident.CreatedAt, incident.ResolvedAt
+            });
+        }
+
+        // =====================================================
+        // STAFF THEO DÕI SỰ CỐ ĐÃ BÁO
+        // GET /api/v1/staff/incidents
+        // =====================================================
+        [HttpGet("incidents")]
+        public async Task<IActionResult> MyIncidents()
+        {
+            var staff = await GetCurrentStaffAsync();
+            if (staff == null)
+                return Unauthorized(new { message = "Không tìm thấy nhân viên đăng nhập." });
+
+            var items = await _context.Complaints.AsNoTracking()
+                .Where(x => x.Source == "staff" && x.ReportedByStaffId == staff.Id)
+                .OrderByDescending(x => x.CreatedAt)
+                .Select(x => new
+                {
+                    x.Id, x.ShipmentId, x.AssignmentId, x.Type, x.Content,
+                    x.Status, x.Response, x.CreatedAt, x.ResolvedAt
+                })
+                .ToListAsync();
+            return Ok(items);
+        }
     }
-}
+}   

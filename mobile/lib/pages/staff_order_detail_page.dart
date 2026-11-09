@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/staff_api_service.dart';
 import '../services/geofence_service.dart';
+import 'staff_incident_page.dart';
 
 class StaffOrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -174,6 +175,29 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
     }
   }
 
+  Future<void> _openIncidentPage() async {
+    final rawId = widget.order['assignmentId'];
+    final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã phân công đơn hàng.'),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StaffIncidentPage(
+          assignmentId: id,
+          shipmentId: _field('shipmentId'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final shipmentStatus = _field('shipmentStatus').trim().toLowerCase();
@@ -250,6 +274,17 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
         if (available.isEmpty) const Padding(
           padding: EdgeInsets.only(top: 14),
           child: Text('Không có thao tác dành cho trạng thái hiện tại.'),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.report_problem_outlined),
+          label: const Text('Báo cáo sự cố'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red.shade700,
+            minimumSize: const Size(double.infinity, 54),
+            side: BorderSide(color: Colors.red.shade700),
+          ),
+          onPressed: _busy ? null : _openIncidentPage,
         ),
       ]),
     );

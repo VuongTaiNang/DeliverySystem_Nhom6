@@ -382,4 +382,55 @@ class StaffApiService {
     }
     return fallback;
   }
+  
+    static const incidentTypeLabels = <String, String>{
+    'customer_unreachable': 'Không liên lạc được người nhận',
+    'wrong_address': 'Sai / thiếu địa chỉ',
+    'customer_refused': 'Người nhận từ chối nhận hàng',
+    'goods_damaged': 'Hàng bị hư hỏng',
+    'vehicle_issue': 'Sự cố phương tiện',
+    'accident': 'Tai nạn giao thông',
+    'other': 'Sự cố khác',
+  };
+
+  static Future<Map<String, dynamic>> reportIncident(
+    int assignmentId,
+    String type,
+    String description,
+  ) async {
+    final desc = description.trim();
+    if (!incidentTypeLabels.containsKey(type)) {
+      throw Exception('Loại sự cố không hợp lệ.');
+    }
+    if (desc.length < 10 || desc.length > 1000) {
+      throw Exception('Mô tả sự cố phải từ 10 đến 1000 ký tự.');
+    }
+    final response = await _send(
+      () => http.post(
+        Uri.parse(
+            '${ApiService.baseUrl}/api/v1/staff/assignments/$assignmentId/incidents'),
+        headers: _headers(),
+        body: jsonEncode({'type': type, 'description': desc}),
+      ),
+    );
+    final data = _decode(response);
+    if (_ok(response)) return Map<String, dynamic>.from(data as Map);
+    throw Exception(_message(response, data, 'Không gửi được báo cáo sự cố.'));
+  }
+
+  static Future<List<Map<String, dynamic>>> getMyIncidents() async {
+    final response = await _send(
+      () => http.get(
+        Uri.parse('${ApiService.baseUrl}/api/v1/staff/incidents'),
+        headers: _headers(),
+      ),
+    );
+    final data = _decode(response);
+    if (_ok(response)) {
+      return data is List
+          ? data.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          : [];
+    }
+    throw Exception(_message(response, data, 'Không tải được danh sách sự cố.'));
+  }
 }

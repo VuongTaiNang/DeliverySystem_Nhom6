@@ -4,6 +4,7 @@ import { api, money, STATUS, EVENT_STATUS } from "./api";
 import type { PickupLocation, Quote, ServiceArea, Shipment, ShipmentInput } from "./api";
 import "./App.css";
 import IncidentPanel from "./IncidentPanel";
+import MyComplaints from "./MyComplaints";
 import StaffSprint2 from "./StaffSprint2";
 import VnPayPanel from "./VnPayPanel";
 import PaymentResultPage from "./PaymentResultPage";
@@ -34,6 +35,7 @@ type Page =
   | "staff"
   | "warehouse"
   | "incidents"
+  | "my-complaints"
   | "reports"
   | "pricing"
   | "pricing-services"
@@ -53,6 +55,7 @@ const PATH_MAP: Record<Page, string> = {
   staff: "/staff",
   warehouse: "/warehouse",
   incidents: "/incidents",
+  "my-complaints": "/my-complaints",
   reports: "/reports",
   pricing: "/pricing",
   "pricing-services": "/pricing-services",
@@ -86,6 +89,7 @@ function getPageFromLocation(): Page | null {
     if (val === "/settlements" || val === "settlements") return "settlements";
     if (val === "/reports" || val === "reports") return "reports";
     if (val === "/incidents" || val === "incidents") return "incidents";
+    if (val === "/my-complaints" || val === "my-complaints") return "my-complaints";
     if (val === "/warehouse" || val === "warehouse") return "warehouse";
     if (val === "/staff" || val === "staff") return "staff";
     if (val === "/pricing" || val === "pricing") return "pricing";
@@ -111,6 +115,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
   customer: [
     "dashboard",
     "shipments",
+    "my-complaints",
     "create",
     "pricing-services",
     "support",
@@ -620,6 +625,7 @@ function Badge({ shipment }: {
       staff: "Công việc giao nhận",
       warehouse: "Quản lý kho và trung chuyển",
       incidents: "Quản lý sự cố và khiếu nại",
+      "my-complaints": "Khiếu nại của tôi",
       reports: "Báo cáo hoạt động",
       pricing: "Cấu hình bảng giá",
       "pricing-services": "Bảng giá & Dịch vụ",
@@ -1149,7 +1155,7 @@ function Badge({ shipment }: {
                   </div>
                 </div>
               </fieldset>
-              </form>) : page === "staff" ? (<StaffSprint2 />) : page === "warehouse" ? (<WarehousePage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
+              </form>) : page === "staff" ? (<StaffSprint2 />) : page === "my-complaints" ? (<MyComplaints />) : page === "warehouse" ? (<WarehousePage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
             }}/>) : page === "incidents" ? (<IncidentManagement />) : page === "reports" ? (<ReportsPage />) : page === "pricing" ? (<PricingPage />) : page === "pricing-services" ? (<PricingServicesPage onNavigate={navigate} />) : page === "support" ? (<PolicyFAQPage />) : page === "dispatch" ? (<DispatchPage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
@@ -1332,6 +1338,7 @@ function Badge({ shipment }: {
               ["home", "⌂", "Trang chủ"],
               ["dashboard", "◫", "Tổng quan"],
               ["shipments", "▤", "Đơn hàng"],
+              ["my-complaints", "✉", "Khiếu nại của tôi"],
               ["create", "+", user ? "Tạo đơn mới" : "Tạo đơn nhanh"],
               ["staff", "↗", "Việc giao nhận"],
               ["warehouse", "▣", "Kho & trung chuyển"],
