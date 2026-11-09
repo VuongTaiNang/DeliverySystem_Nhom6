@@ -22,6 +22,7 @@ import type { UserRole } from "./api";
 import DispatchPage from "./DispatchPage";
 import SettlementsPage from "./SettlementsPage";
 import MapLocationPicker from "./components/MapLocationPicker";
+import OperationsDashboard from "./OperationsDashboard";
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
 const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
 
@@ -192,7 +193,7 @@ function Badge({ shipment }: {
     </span>);
 }
   export default function App() {
-    const { user, logout } = useAuth();
+    const { user, checkingSession, logout } = useAuth();
     const [paymentStatuses, setPaymentStatuses] = useState<Record<string, string>>({});
 
     const normalizedRole: UserRole | null = user
@@ -230,22 +231,44 @@ function Badge({ shipment }: {
     });
 
       useEffect(() => {
-        // VNPay Return URL tải lại trang: giữ đường dẫn kết quả trong khi khôi phục JWT.
-        if (getPageFromLocation() === "payment-result") {
-          setPage("payment-result");
-          return;
-        }
-        if (!user) {
-          setPage("home");
-          return;
-        }
-        setPage((current) => {
-          if (!allowedPages.includes(current) || current === "home") {
-            return normalizedRole === "staff" ? "staff" : normalizedRole === "operations" ? "shipments" : "dashboard";
-          }
-          return current;
-        });
-      }, [user, normalizedRole]);
+  // Chờ AuthGate kiểm tra và khôi phục phiên đăng nhập.
+  if (checkingSession) {
+    return;
+  }
+
+  // Giữ nguyên trang kết quả thanh toán VNPay.
+  if (getPageFromLocation() === "payment-result") {
+    setPage("payment-result");
+    return;
+  }
+
+  // Nếu thực sự chưa đăng nhập thì về trang chủ.
+  if (!user) {
+    setPage("home");
+    return;
+  }
+
+  // Sau khi đăng nhập được khôi phục, ưu tiên trang trong URL.
+  const pageFromUrl = getPageFromLocation();
+
+  if (pageFromUrl && allowedPages.includes(pageFromUrl)) {
+    setPage(pageFromUrl);
+    return;
+  }
+
+  // Nếu URL không hợp lệ với vai trò hiện tại thì dùng trang mặc định.
+  setPage((current) => {
+    if (!allowedPages.includes(current) || current === "home") {
+      return normalizedRole === "staff"
+        ? "staff"
+        : normalizedRole === "operations"
+          ? "shipments"
+          : "dashboard";
+    }
+
+    return current;
+  });
+}, [user, normalizedRole, checkingSession]);
 
     const navigate = (target: Page | string) => {
         let targetPage: Page = "home";
@@ -394,43 +417,45 @@ function Badge({ shipment }: {
     const [pickupLoading, setPickupLoading] =
       useState(user?.role === "customer");
       useEffect(() => {
-        if (!user) {
-          setShipments([]);
-          setLoading(false);
-          return;
-        }
+  if (!user || normalizedRole === "operations") {
+    if (!user) {
+      setShipments([]);
+    }
+    setLoading(false);
+    return;
+  }
 
-        let active = true;
+  let active = true;
 
-        setLoading(true);
+  setLoading(true);
 
-        api.list()
-          .then((data) => {
-            if (active) {
-              setShipments(data);
-            }
-          })
-          .catch((error: unknown) => {
-            if (active) {
-              setNotice({
-                kind: "error",
-                text:
-                  error instanceof Error
-                    ? error.message
-                    : "Không tải được dữ liệu.",
-              });
-            }
-          })
-          .finally(() => {
-            if (active) {
-              setLoading(false);
-            }
-          });
+  api.list()
+    .then((data) => {
+      if (active) {
+        setShipments(data);
+      }
+    })
+    .catch((error: unknown) => {
+      if (active) {
+        setNotice({
+          kind: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Không tải được dữ liệu.",
+        });
+      }
+    })
+    .finally(() => {
+      if (active) {
+        setLoading(false);
+      }
+    });
 
-        return () => {
-          active = false;
-        };
-      }, [user]);
+  return () => {
+    active = false;
+  };
+}, [user, normalizedRole]);
       
       useEffect(() => {
         if (!user || user.role !== "customer") {
@@ -493,27 +518,7 @@ function Badge({ shipment }: {
       };
     }, [user?.id, normalizedRole, page]);
 
-    useEffect(() => {
-      if (!user || normalizedRole !== "operations" || page !== "shipments") return;
-      let alive = true;
-      const refresh = async () => {
-        try {
-          const rows = await api.list();
-          if (alive) setShipments(rows);
-        } catch (error) {
-          console.error("Không thể làm mới đơn Operations:", error);
-        }
-      };
-      void refresh();
-      const timer = window.setInterval(() => { if (document.visibilityState !== "hidden") void refresh(); }, 15000);
-      const focus = () => { void refresh(); };
-      window.addEventListener("focus", focus);
-      return () => {
-        alive = false;
-        window.clearInterval(timer);
-        window.removeEventListener("focus", focus);
-      };
-    }, [user?.id, normalizedRole, page]);
+   
     function handleTracking(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setSelectedId(null);
@@ -1256,14 +1261,16 @@ function Badge({ shipment }: {
             </section>)}
     </>);
     const operationsSection: OperationsSection =
-      page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
+      page === "dashboard" ? "dashboard" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
     if (normalizedRole === "operations") {
       return (
         <OperationsLayout
           section={operationsSection}
           onSectionChange={(section) =>
             navigate(
-              section === "orders"
+              section === "dashboard"
+                ? "dashboard"
+                : section === "orders"
                 ? "shipments"
                 : section === "routes"
                 ? "routes"
@@ -1284,7 +1291,9 @@ function Badge({ shipment }: {
                 aria-current={page === "dispatch" ? "page" : undefined}>Phân công / Điều phối</button>
             </div>
           )}
-          {renderContent}
+           {page === "dashboard" && normalizedRole === "operations"
+            ? <OperationsDashboard />
+            : renderContent}
         </OperationsLayout>
       );
     }

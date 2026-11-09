@@ -82,7 +82,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, logout, openAuth, closeAuth, updateUser }}>
+    <AuthContext.Provider value={{ user, checkingSession, logout, openAuth, closeAuth, updateUser }}>
       {children}
 
       {checkingSession && <div className="session-check" role="status">Đang kiểm tra phiên đăng nhập…</div>}

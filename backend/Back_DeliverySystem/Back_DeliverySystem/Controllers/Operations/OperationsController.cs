@@ -29,31 +29,143 @@ namespace Back_DeliverySystem.Controllers
         // GET: /api/v1/operations/dashboard
         // =========================================================
         [HttpGet("dashboard")]
-        public IActionResult Dashboard()
+        public async Task<IActionResult> Dashboard()
         {
-            var userId =
-                User.FindFirstValue(
-                    ClaimTypes.NameIdentifier
-                );
+            // 1. Thống kê đơn hàng
+            var totalOrders = await _context.Shipments
+                .AsNoTracking()
+                .CountAsync();
 
-            var name =
-                User.FindFirstValue(
-                    ClaimTypes.Name
-                );
+            var unassignedOrders = await _context.Shipments
+                .AsNoTracking()
+                .Where(s =>
+                    (s.Status == "pending_pickup" ||
+                     s.Status == "pickup_failed") &&
+                    !_context.DeliveryAssignments.Any(a =>
+                        a.ShipmentId == s.Id && a.IsActive))
+                .CountAsync();
 
-            var role =
-                User.FindFirstValue(
-                    ClaimTypes.Role
-                );
+            var inDeliveryOrders = await _context.Shipments
+                .AsNoTracking()
+                .CountAsync(s =>
+                    s.Status == "out_for_delivery" ||
+                    s.Status == "delivering");
+
+            var deliveredOrders = await _context.Shipments
+                .AsNoTracking()
+                .CountAsync(s => s.Status == "delivered");
+
+            var failedOrders = await _context.Shipments
+                .AsNoTracking()
+                .CountAsync(s => s.Status == "delivery_failed");
+
+            var returnedOrders = await _context.Shipments
+                .AsNoTracking()
+                .CountAsync(s =>
+                    s.Status == "return_pending" ||
+                    s.Status == "returning" ||
+                    s.Status == "returned" ||
+                    s.Status == "return_confirmed");
+
+            // 2. Thống kê nhân viên
+            var availableStaff = await _context.Staffs
+                .AsNoTracking()
+                .CountAsync(s =>
+                    s.Status == "available" && s.IsAvailable);
+
+            var busyStaff = await _context.Staffs
+                .AsNoTracking()
+                .CountAsync(s =>
+                    s.Status == "busy" ||
+                    (s.Status != "inactive" && !s.IsAvailable));
+
+            var inactiveStaff = await _context.Staffs
+                .AsNoTracking()
+                .CountAsync(s => s.Status == "inactive");
+
+            // 3. Số đơn theo nhân viên đang được phân công
+            var ordersByStaff = await (
+                from assignment in _context.DeliveryAssignments.AsNoTracking()
+                where assignment.IsActive
+                join staff in _context.Staffs.AsNoTracking()
+                    on assignment.StaffId equals staff.Id
+                join user in _context.Users.AsNoTracking()
+                    on staff.UserId equals user.Id
+                group assignment by new
+                {
+                    staff.Id,
+                    staff.EmployeeCode,
+                    user.FullName
+                } into grouped
+                orderby grouped.Count() descending
+                select new
+                {
+                    staffId = grouped.Key.Id,
+                    employeeCode = grouped.Key.EmployeeCode,
+                    staffName = grouped.Key.FullName,
+                    totalOrders = grouped.Count()
+                }
+            ).ToListAsync();
+
+            // 4. Số đơn theo khu vực giao hàng
+            var ordersByArea = await (
+                from shipment in _context.Shipments.AsNoTracking()
+                where shipment.DeliveryAreaId != null
+                join area in _context.Areas.AsNoTracking()
+                    on shipment.DeliveryAreaId equals area.Id
+                group shipment by new
+                {
+                    area.Id,
+                    area.Code,
+                    area.Name
+                } into grouped
+                orderby grouped.Count() descending
+                select new
+                {
+                    areaId = grouped.Key.Id,
+                    areaCode = grouped.Key.Code,
+                    areaName = grouped.Key.Name,
+                    totalOrders = grouped.Count()
+                }
+            ).ToListAsync();
+
+            // 5. Tỷ lệ vận hành
+            var resolvedOrders = deliveredOrders + failedOrders;
+
+            var successRate = resolvedOrders == 0
+                ? 0
+                : Math.Round(
+                    (double)deliveredOrders / resolvedOrders * 100, 2);
+
+            var failureRate = resolvedOrders == 0
+                ? 0
+                : Math.Round(
+                    (double)failedOrders / resolvedOrders * 100, 2);
 
             return Ok(new
             {
-                message =
-                    "Truy cập Operations thành công.",
+                totalOrders,
+                unassignedOrders,
+                inDeliveryOrders,
+                deliveredOrders,
+                failedOrders,
+                returnedOrders,
 
-                userId,
-                name,
-                role
+                staff = new
+                {
+                    available = availableStaff,
+                    busy = busyStaff,
+                    inactive = inactiveStaff,
+                    total = availableStaff + busyStaff + inactiveStaff
+                },
+
+                successRate,
+                failureRate,
+
+                ordersByStaff,
+                ordersByArea,
+
+                updatedAt = DateTime.UtcNow
             });
         }
 
