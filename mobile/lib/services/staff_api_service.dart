@@ -17,9 +17,13 @@ class StaffAssignment {
   final String senderName;
   final String senderPhone;
   final String pickupAddress;
+  final double? pickupLatitude;
+  final double? pickupLongitude;
   final String recipientName;
   final String recipientPhone;
   final String deliveryAddress;
+  final double? deliveryLatitude;
+  final double? deliveryLongitude;
   final String goods;
   final num weightKg;
   final num codAmount;
@@ -34,9 +38,13 @@ class StaffAssignment {
     required this.senderName,
     required this.senderPhone,
     required this.pickupAddress,
+    required this.pickupLatitude,
+    required this.pickupLongitude,
     required this.recipientName,
     required this.recipientPhone,
     required this.deliveryAddress,
+    required this.deliveryLatitude,
+    required this.deliveryLongitude,
     required this.goods,
     required this.weightKg,
     required this.codAmount,
@@ -52,9 +60,13 @@ class StaffAssignment {
     'senderName': senderName,
     'senderPhone': senderPhone,
     'pickupAddress': pickupAddress,
+    'pickupLatitude': pickupLatitude,
+    'pickupLongitude': pickupLongitude,
     'recipientName': recipientName,
     'recipientPhone': recipientPhone,
     'deliveryAddress': deliveryAddress,
+    'deliveryLatitude': deliveryLatitude,
+    'deliveryLongitude': deliveryLongitude,
     'goods': goods,
     'weightKg': weightKg,
     'codAmount': codAmount,
@@ -65,6 +77,10 @@ class StaffAssignment {
   factory StaffAssignment.fromJson(Map<String, dynamic> j) {
     String s(String key) => j[key]?.toString() ?? '';
     num n(String key) => j[key] is num ? j[key] as num : 0;
+    double? coordinate(String key) {
+      final value = j[key];
+      return value is num ? value.toDouble() : double.tryParse('$value');
+    }
 
     return StaffAssignment(
       assignmentId: (j['assignmentId'] as num).toInt(),
@@ -74,9 +90,13 @@ class StaffAssignment {
       senderName: s('senderName'),
       senderPhone: s('senderPhone'),
       pickupAddress: s('pickupAddress'),
+      pickupLatitude: coordinate('pickupLatitude'),
+      pickupLongitude: coordinate('pickupLongitude'),
       recipientName: s('recipientName'),
       recipientPhone: s('recipientPhone'),
       deliveryAddress: s('deliveryAddress'),
+      deliveryLatitude: coordinate('deliveryLatitude'),
+      deliveryLongitude: coordinate('deliveryLongitude'),
       goods: s('goods'),
       weightKg: n('weightKg'),
       codAmount: n('codAmount'),
@@ -102,17 +122,17 @@ enum StaffAction {
 
 extension StaffActionInfo on StaffAction {
   String get label => switch (this) {
-        StaffAction.accept => 'Nhận đơn',
-        StaffAction.reject => 'Từ chối',
-        StaffAction.startPickup => 'Bắt đầu lấy hàng',
-        StaffAction.pickupSuccess => 'Lấy hàng thành công',
-        StaffAction.pickupFailed => 'Lấy hàng thất bại',
-        StaffAction.startDelivery => 'Bắt đầu giao',
-        StaffAction.deliverySuccess => 'Giao thành công',
-        StaffAction.deliveryFailed => 'Giao thất bại',
-        StaffAction.startReturn => 'Bắt đầu hoàn hàng',
-        StaffAction.returnComplete => 'Hoàn hàng xong',
-      };
+    StaffAction.accept => 'Nhận đơn',
+    StaffAction.reject => 'Từ chối',
+    StaffAction.startPickup => 'Bắt đầu lấy hàng',
+    StaffAction.pickupSuccess => 'Lấy hàng thành công',
+    StaffAction.pickupFailed => 'Lấy hàng thất bại',
+    StaffAction.startDelivery => 'Bắt đầu giao',
+    StaffAction.deliverySuccess => 'Giao thành công',
+    StaffAction.deliveryFailed => 'Giao thất bại',
+    StaffAction.startReturn => 'Bắt đầu hoàn hàng',
+    StaffAction.returnComplete => 'Hoàn hàng xong',
+  };
 
   /// Các action cần hộp thoại nhập lý do.
   bool get needsReason =>
@@ -159,9 +179,10 @@ class StaffApiService {
     if (_ok(response)) {
       if (data is List) {
         return data
-            .map((e) => StaffAssignment.fromJson(
-                  Map<String, dynamic>.from(e as Map),
-                ))
+            .map(
+              (e) =>
+                  StaffAssignment.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
             .toList();
       }
       return [];
@@ -172,10 +193,7 @@ class StaffApiService {
   static Future<Map<String, dynamic>> acceptAssignment(int id) =>
       _patch(id, 'accept');
 
-  static Future<Map<String, dynamic>> rejectAssignment(
-    int id,
-    String reason,
-  ) =>
+  static Future<Map<String, dynamic>> rejectAssignment(int id, String reason) =>
       _patch(id, 'reject', reason: _cleanReason(reason, 'từ chối'));
 
   static Future<Map<String, dynamic>> startPickup(int id) =>
@@ -197,10 +215,7 @@ class StaffApiService {
   static Future<Map<String, dynamic>> deliverySuccess(int id) =>
       _patch(id, 'delivery-success');
 
-  static Future<Map<String, dynamic>> deliveryFailed(
-    int id,
-    String reason,
-  ) =>
+  static Future<Map<String, dynamic>> deliveryFailed(int id, String reason) =>
       _patch(
         id,
         'delivery-failed',
@@ -212,6 +227,31 @@ class StaffApiService {
 
   static Future<Map<String, dynamic>> returnComplete(int id) =>
       _patch(id, 'return-complete');
+
+  /// Vị trí chỉ được gửi khi Staff tự bật chia sẻ cho một assignment đã nhận.
+  static Future<Map<String, dynamic>> updateLocation({
+    required int assignmentId,
+    required double latitude,
+    required double longitude,
+    double? accuracyMeters,
+  }) async {
+    final response = await _send(
+      () => http.post(
+        Uri.parse('${ApiService.baseUrl}/api/v1/staff/location'),
+        headers: _headers(),
+        body: jsonEncode({
+          'assignmentId': assignmentId,
+          'latitude': latitude,
+          'longitude': longitude,
+          if (accuracyMeters != null) 'accuracyMeters': accuracyMeters,
+        }),
+      ),
+    );
+    final data = _decode(response);
+    if (_ok(response))
+      return data is Map<String, dynamic> ? data : <String, dynamic>{};
+    throw Exception(_message(response, data, 'Không cập nhật được vị trí.'));
+  }
 
   /// Gọi đúng hàm theo [action] (tiện cho giao diện).
   static Future<Map<String, dynamic>> perform(
@@ -278,19 +318,33 @@ class StaffApiService {
 
   /// Adapter dùng bởi giao diện Staff của Thuật; nghiệp vụ nằm tại service của Ân.
   static Future<Map<String, dynamic>> performPath(
-    String path, int assignmentId, {String? reason}) {
+    String path,
+    int assignmentId, {
+    String? reason,
+  }) {
     switch (path) {
-      case 'accept': return acceptAssignment(assignmentId);
-      case 'reject': return rejectAssignment(assignmentId, reason ?? '');
-      case 'start-pickup': return startPickup(assignmentId);
-      case 'pickup-success': return pickupSuccess(assignmentId);
-      case 'pickup-failed': return pickupFailed(assignmentId, reason ?? '');
-      case 'start-delivery': return startDelivery(assignmentId);
-      case 'delivery-success': return deliverySuccess(assignmentId);
-      case 'delivery-failed': return deliveryFailed(assignmentId, reason ?? '');
-      case 'start-return': return startReturn(assignmentId);
-      case 'return-complete': return returnComplete(assignmentId);
-      default: throw Exception('Thao tác Staff không hợp lệ: $path');
+      case 'accept':
+        return acceptAssignment(assignmentId);
+      case 'reject':
+        return rejectAssignment(assignmentId, reason ?? '');
+      case 'start-pickup':
+        return startPickup(assignmentId);
+      case 'pickup-success':
+        return pickupSuccess(assignmentId);
+      case 'pickup-failed':
+        return pickupFailed(assignmentId, reason ?? '');
+      case 'start-delivery':
+        return startDelivery(assignmentId);
+      case 'delivery-success':
+        return deliverySuccess(assignmentId);
+      case 'delivery-failed':
+        return deliveryFailed(assignmentId, reason ?? '');
+      case 'start-return':
+        return startReturn(assignmentId);
+      case 'return-complete':
+        return returnComplete(assignmentId);
+      default:
+        throw Exception('Thao tác Staff không hợp lệ: $path');
     }
   }
 
@@ -320,9 +374,7 @@ class StaffApiService {
   static String _cleanReason(String reason, String what) {
     final value = reason.trim();
     if (value.length < _minReason || value.length > _maxReason) {
-      throw Exception(
-        'Lý do $what phải từ $_minReason đến $_maxReason ký tự.',
-      );
+      throw Exception('Lý do $what phải từ $_minReason đến $_maxReason ký tự.');
     }
     return value;
   }
@@ -341,8 +393,7 @@ class StaffApiService {
     }
   }
 
-  static bool _ok(http.Response r) =>
-      r.statusCode >= 200 && r.statusCode < 300;
+  static bool _ok(http.Response r) => r.statusCode >= 200 && r.statusCode < 300;
 
   static dynamic _decode(http.Response r) {
     if (r.statusCode == 401 || r.statusCode == 403) {

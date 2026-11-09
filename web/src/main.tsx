@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import AccountRoute from "./AccountRoute";
 import OperationsStaffRoute from "./OperationsStaffRoute";
+import OperationsStaffTrackingRoute from "./OperationsStaffTrackingRoute";
 import AuthGate from "./AuthGate";
 import "./noticeAutoHide.css";
 
@@ -41,6 +42,7 @@ function RootRouter() {
   if (path === "/operations/staff-management") {
     return <OperationsStaffRoute />;
   }
+  if (path === "/operations/staff-tracking") return <OperationsStaffTrackingRoute />;
 
   return <App />;
 }

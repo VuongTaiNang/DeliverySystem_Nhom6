@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<ComplaintHistory> ComplaintHistories => Set<ComplaintHistory>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Staff> Staffs => Set<Staff>();
+    public DbSet<StaffLocation> StaffLocations => Set<StaffLocation>();
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<StaffArea> StaffAreas => Set<StaffArea>();
 
@@ -68,6 +69,22 @@ public class AppDbContext : DbContext
                 .WithOne()
                 .HasForeignKey<Staff>(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Mỗi Staff chỉ lưu một vị trí gần nhất. Lịch sử ShipmentEvent thuộc
+        // Issue Geofencing; Issue #21 chỉ cần vị trí mới nhất cho Operations.
+        modelBuilder.Entity<StaffLocation>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ShipmentId).HasMaxLength(50).IsRequired();
+            entity.HasIndex(x => x.StaffId).IsUnique();
+            entity.HasIndex(x => x.UpdatedAt);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<DeliveryAssignment>().WithMany().HasForeignKey(x => x.AssignmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Shipment>().WithMany().HasForeignKey(x => x.ShipmentId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // =========================================================

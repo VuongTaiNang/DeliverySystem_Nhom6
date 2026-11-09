@@ -39,6 +39,7 @@ export default function OperationsStaffRoute() {
       routes: "/operations/routes",
       areas: "/operations/areas",
       staff: "/operations/staff-management",
+      tracking: "/operations/staff-tracking",
       incidents: "/incidents",
       settlements: "/settlements",
     };
