@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import 'login_page.dart';
 
+import '../operations/dashboard/operations_dashboard_screen.dart';
 import '../operations/settlement/settlement_screen.dart';
 import '../operations/shipment/shipment_list_screen.dart';
 
@@ -21,6 +22,7 @@ class _OperationsHomePageState extends State<OperationsHomePage> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
+    OperationsDashboardScreen(),
     ShipmentListScreen(),
     SettlementScreen(),
   ];
@@ -61,6 +63,11 @@ class _OperationsHomePageState extends State<OperationsHomePage> {
         unselectedItemColor: muted,
         type: BottomNavigationBarType.fixed,
         items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard),
+            label: 'Tổng quan',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.local_shipping_outlined),
             activeIcon: Icon(Icons.local_shipping),
