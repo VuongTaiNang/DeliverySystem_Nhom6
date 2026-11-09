@@ -69,6 +69,13 @@ namespace Back_DeliverySystem.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -77,6 +84,15 @@ namespace Back_DeliverySystem.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<int?>("CustomerId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("HandledByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReportedByStaffId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ReportedByUserId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("ResolvedAt")
@@ -89,19 +105,77 @@ namespace Back_DeliverySystem.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("customer");
+
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ShipmentId");
 
+                    b.HasIndex("Source", "Status");
+
                     b.ToTable("Complaints");
+                });
+
+            modelBuilder.Entity("Back_DeliverySystem.Models.ComplaintHistory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ActorRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ComplaintId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ToStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ComplaintId");
+
+                    b.ToTable("ComplaintHistories");
                 });
 
             modelBuilder.Entity("Back_DeliverySystem.Models.DeliveryAssignment", b =>
@@ -820,6 +894,17 @@ namespace Back_DeliverySystem.Migrations
                     b.Navigation("Shipment");
                 });
 
+            modelBuilder.Entity("Back_DeliverySystem.Models.ComplaintHistory", b =>
+                {
+                    b.HasOne("Back_DeliverySystem.Models.Complaint", "Complaint")
+                        .WithMany("History")
+                        .HasForeignKey("ComplaintId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Complaint");
+                });
+
             modelBuilder.Entity("Back_DeliverySystem.Models.DeliveryAssignment", b =>
                 {
                     b.HasOne("Back_DeliverySystem.Models.User", null)
@@ -964,6 +1049,11 @@ namespace Back_DeliverySystem.Migrations
             modelBuilder.Entity("Back_DeliverySystem.Models.Area", b =>
                 {
                     b.Navigation("StaffAreas");
+                });
+
+            modelBuilder.Entity("Back_DeliverySystem.Models.Complaint", b =>
+                {
+                    b.Navigation("History");
                 });
 
             modelBuilder.Entity("Back_DeliverySystem.Models.DeliveryRoute", b =>

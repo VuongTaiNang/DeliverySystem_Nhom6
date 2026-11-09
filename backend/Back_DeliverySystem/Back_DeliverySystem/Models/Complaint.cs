@@ -28,4 +28,20 @@ public class Complaint
 
     // Quan hệ với Shipment
     public Shipment? Shipment { get; set; }
+        // customer | staff
+    public string Source { get; set; } = "customer";
+
+    // Operations phân loại: delivery_delay, goods_damage, staff_attitude, cod_payment, other
+    public string? Category { get; set; }
+
+    // Dùng cho #22 (sự cố do Staff báo)
+    public int? ReportedByUserId { get; set; }
+    public int? ReportedByStaffId { get; set; }
+    public int? AssignmentId { get; set; }
+
+    // Operations xử lý gần nhất
+    public int? HandledByUserId { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+
+    public List<ComplaintHistory> History { get; set; } = new();
 }

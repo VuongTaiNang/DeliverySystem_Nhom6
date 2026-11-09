@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { api, INCIDENT_STATUSES, INCIDENT_TYPES } from "./api";
+import { api, INCIDENT_STATUSES, INCIDENT_TYPES, typeLabel } from "./api";
 import type { Incident, IncidentType } from "./api";
 import { formatVietnamDateTime } from "./lib/dateTime";
+import ComplaintTimeline from "./ComplaintTimeline";
 
 interface IncidentPanelProps {
   shipmentId: string;
@@ -18,6 +19,7 @@ export default function IncidentPanel({ shipmentId }: IncidentPanelProps) {
   const [submitError, setSubmitError] = useState("");
   const [success, setSuccess] = useState("");
   const [reload, setReload] = useState(0);
+  const [historyOpenId, setHistoryOpenId] = useState<number | null>(null);
   const submitting = useRef(false);
   const mounted = useRef(false);
 
@@ -223,7 +225,7 @@ export default function IncidentPanel({ shipmentId }: IncidentPanelProps) {
             {incidents.map((incident) => (
               <li key={incident.id} className="incident-card">
                 <div className="incident-card-heading">
-                  <strong>{INCIDENT_TYPES[incident.type]}</strong>
+                  <strong>{typeLabel(incident.type)}</strong>
                   <span className={`badge incident-${incident.status}`}>
                     {INCIDENT_STATUSES[incident.status]}
                   </span>
@@ -246,6 +248,27 @@ export default function IncidentPanel({ shipmentId }: IncidentPanelProps) {
                     )}
                   </div>
                 )}
+
+                <button
+                  type="button"
+                  className="complaint-history-toggle"
+                  onClick={() =>
+                    setHistoryOpenId(
+                      historyOpenId === incident.id ? null : incident.id,
+                    )
+                  }
+                >
+                  {historyOpenId === incident.id
+                    ? "Ẩn lịch sử xử lý"
+                    : "Xem lịch sử xử lý"}
+                </button>
+
+                {historyOpenId === incident.id && (
+                  <ComplaintTimeline
+                    key={`${incident.id}-${incident.status}`}
+                    complaintId={incident.id}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -253,4 +276,4 @@ export default function IncidentPanel({ shipmentId }: IncidentPanelProps) {
       </div>
     </section>
   );
-}
+};
