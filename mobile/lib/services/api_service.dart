@@ -260,6 +260,24 @@ class ApiService {
 
   // Sprint 3: structured ward/commune/special-zone catalog.
   static Future<List<Map<String, dynamic>>> listAreas() async {
+    try {
+      final opsResponse = await http.get(
+        Uri.parse('$baseUrl/api/v1/operations/areas'),
+        headers: _headers(),
+      ).timeout(const Duration(seconds: 10));
+
+      if (_ok(opsResponse)) {
+        final decoded = jsonDecode(opsResponse.body);
+        if (decoded is List) {
+          return decoded.map((item) =>
+            Map<String, dynamic>.from(item as Map)
+          ).toList();
+        }
+      }
+    } catch (_) {
+      // Fallback to /api/v1/areas if not authorized as operations
+    }
+
     final response = await http.get(
       Uri.parse('$baseUrl/api/v1/areas'),
       headers: _headers(),

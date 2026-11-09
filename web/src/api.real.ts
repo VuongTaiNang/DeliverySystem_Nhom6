@@ -25,6 +25,7 @@ export interface ServiceArea {
   code: string;
   name: string;
   type: "ward" | "commune" | "special_zone";
+  isActive?: boolean;
 }
 
 
@@ -432,7 +433,11 @@ async list(): Promise<Shipment[]> {
     return request<Shipment[]>("/shipments");
 },
 async listAreas(): Promise<ServiceArea[]> {
-    return request<ServiceArea[]>("/areas");
+    try {
+        return await request<ServiceArea[]>("/operations/areas");
+    } catch {
+        return await request<ServiceArea[]>("/areas");
+    }
 },
 async quote(input: ShipmentInput): Promise<Quote> {
     validate(input);

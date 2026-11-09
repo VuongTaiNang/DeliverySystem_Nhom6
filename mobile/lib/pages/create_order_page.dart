@@ -559,10 +559,15 @@ class _CreateOrderPageState
                    ),
                    hint: Text(_areasLoading ? 'Đang tải khu vực…' : 'Chọn khu vực lấy hàng'),
                    isExpanded: true,
-                   items: _areas.map((area) => DropdownMenuItem<int>(
-                     value: (area['id'] as num).toInt(),
-                     child: Text(area['name'].toString(), overflow: TextOverflow.ellipsis),
-                   )).toList(),
+                   items: _areas
+                       .where((area) => (area['isActive'] != false && area['isActive']?.toString() != 'false') || (area['id'] as num).toInt() == _pickupAreaId)
+                       .map((area) {
+                         final code = area['code'] != null ? ' (${area['code']})' : '';
+                         return DropdownMenuItem<int>(
+                           value: (area['id'] as num).toInt(),
+                           child: Text('${area['name']}$code', overflow: TextOverflow.ellipsis),
+                         );
+                       }).toList(),
                    onChanged: (_loading || _areasLoading) ? null : (value) {
                      setState(() {
                        _pickupAreaId = value;
@@ -651,10 +656,15 @@ class _CreateOrderPageState
                    ),
                    hint: Text(_areasLoading ? 'Đang tải khu vực…' : 'Chọn khu vực giao hàng'),
                    isExpanded: true,
-                   items: _areas.map((area) => DropdownMenuItem<int>(
-                     value: (area['id'] as num).toInt(),
-                     child: Text(area['name'].toString(), overflow: TextOverflow.ellipsis),
-                   )).toList(),
+                   items: _areas
+                       .where((area) => (area['isActive'] != false && area['isActive']?.toString() != 'false') || (area['id'] as num).toInt() == _deliveryAreaId)
+                       .map((area) {
+                         final code = area['code'] != null ? ' (${area['code']})' : '';
+                         return DropdownMenuItem<int>(
+                           value: (area['id'] as num).toInt(),
+                           child: Text('${area['name']}$code', overflow: TextOverflow.ellipsis),
+                         );
+                       }).toList(),
                    validator: (value) => value == null ? 'Vui lòng chọn phường/xã giao hàng.' : null,
                    onChanged: (_loading || _areasLoading) ? null : (value) {
                      setState(() {

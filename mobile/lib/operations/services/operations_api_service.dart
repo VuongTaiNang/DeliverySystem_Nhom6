@@ -336,5 +336,93 @@ class OperationsApiService {
 
     throw Exception(data['message'] ?? 'Không hoàn tất được kỳ đối soát.');
   }
+
+  // ===================================================================
+  // 6a. GET /api/v1/operations/areas
+  // Lấy danh sách khu vực vận hành
+  // ===================================================================
+  static Future<List<OperationArea>> getAreas() async {
+    final response = await http
+        .get(
+          Uri.parse('${ApiService.baseUrl}/api/v1/operations/areas'),
+          headers: _headers(),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final data = _decode(response);
+    if (_ok(response)) {
+      final raw = data['data'] ?? (data is List ? data : []);
+      final list = raw is List ? raw : [];
+      return list
+          .whereType<Map>()
+          .map((e) => OperationArea.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
+    }
+
+    throw Exception(data['message'] ?? 'Không tải được danh sách khu vực Operations.');
+  }
+
+  // ===================================================================
+  // 6b. POST /api/v1/operations/areas
+  // Thêm mới khu vực vận hành
+  // ===================================================================
+  static Future<OperationArea> createArea({
+    required String code,
+    required String name,
+    required String type,
+    bool isActive = true,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('${ApiService.baseUrl}/api/v1/operations/areas'),
+          headers: _headers(),
+          body: jsonEncode({
+            'code': code.trim().toUpperCase(),
+            'name': name.trim(),
+            'type': type,
+            'isActive': isActive,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final data = _decode(response);
+    if (_ok(response)) {
+      return OperationArea.fromJson(data);
+    }
+
+    throw Exception(data['message'] ?? 'Thêm mới khu vực thất bại.');
+  }
+
+  // ===================================================================
+  // 6c. PUT /api/v1/operations/areas/{id}
+  // Cập nhật khu vực vận hành
+  // ===================================================================
+  static Future<OperationArea> updateArea({
+    required int id,
+    required String code,
+    required String name,
+    required String type,
+    required bool isActive,
+  }) async {
+    final response = await http
+        .put(
+          Uri.parse('${ApiService.baseUrl}/api/v1/operations/areas/$id'),
+          headers: _headers(),
+          body: jsonEncode({
+            'code': code.trim().toUpperCase(),
+            'name': name.trim(),
+            'type': type,
+            'isActive': isActive,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    final data = _decode(response);
+    if (_ok(response)) {
+      return OperationArea.fromJson(data);
+    }
+
+    throw Exception(data['message'] ?? 'Cập nhật khu vực thất bại.');
+  }
 }
 

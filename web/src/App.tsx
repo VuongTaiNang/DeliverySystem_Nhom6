@@ -23,6 +23,7 @@ import DispatchPage from "./DispatchPage";
 import SettlementsPage from "./SettlementsPage";
 import MapLocationPicker from "./components/MapLocationPicker";
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
+const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
 
 type Page =
   | "home"
@@ -38,6 +39,7 @@ type Page =
   | "support"
   | "dispatch"
   | "routes"
+  | "areas"
   | "settlements"
   | "account"
   | "payment-result";
@@ -56,6 +58,7 @@ const PATH_MAP: Record<Page, string> = {
   support: "/support",
   dispatch: "/dispatch",
   routes: "/operations/routes",
+  areas: "/operations/areas",
   settlements: "/settlements",
   account: "/account",
   "payment-result": "/payment/result",
@@ -87,6 +90,7 @@ function getPageFromLocation(): Page | null {
     if (val === "/pricing" || val === "pricing") return "pricing";
     if (val === "/dispatch" || val === "dispatch") return "dispatch";
     if (val === "/operations/routes" || val === "operations/routes" || val === "routes") return "routes";
+    if (val === "/operations/areas" || val === "operations/areas" || val === "areas") return "areas";
     if (val === "/dashboard" || val === "dashboard") return "dashboard";
     return null;
   };
@@ -130,6 +134,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
     "support",
     "dispatch",
     "routes",
+    "areas",
     "settlements",
     "account",
   ],
@@ -616,6 +621,7 @@ function Badge({ shipment }: {
       support: "Trung tâm hỗ trợ & Chính sách",
       dispatch: "Điều phối giao nhận",
       routes: "Quản lý tuyến giao hàng",
+      areas: "Quản lý khu vực",
       settlements: "Đối soát COD",
       account: "Tài khoản của tôi",
       "payment-result": "Kết quả thanh toán VNPay",
@@ -931,7 +937,14 @@ function Badge({ shipment }: {
                     <select value={form.pickupAreaId ?? ""} disabled={!user || areasLoading || !!areasError}
                       onChange={(event) => update("pickupAreaId", event.target.value ? Number(event.target.value) : undefined)}>
                       <option value="">Chọn khu vực lấy hàng</option>
-                      {serviceAreas.map((area) => <option key={area.id} value={area.id}>{area.name} ({area.code})</option>)}
+                      {serviceAreas
+                        .filter((area) => area.isActive !== false || area.id === form.pickupAreaId)
+                        .map((area) => (
+                          <option key={area.id} value={area.id}>
+                            {area.name} ({area.code}) - {area.type === "ward" ? "Phường" : area.type === "commune" ? "Xã" : "Đặc khu"}
+                            {area.isActive === false ? " (Ngừng hoạt động)" : ""}
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <label>
@@ -939,7 +952,14 @@ function Badge({ shipment }: {
                     <select required={!!user} value={form.deliveryAreaId ?? ""} disabled={!user || areasLoading || !!areasError}
                       onChange={(event) => update("deliveryAreaId", event.target.value ? Number(event.target.value) : undefined)}>
                       <option value="">{areasLoading ? "Đang tải khu vực…" : "Chọn khu vực giao hàng"}</option>
-                      {serviceAreas.map((area) => <option key={area.id} value={area.id}>{area.name} ({area.code})</option>)}
+                      {serviceAreas
+                        .filter((area) => area.isActive !== false || area.id === form.deliveryAreaId)
+                        .map((area) => (
+                          <option key={area.id} value={area.id}>
+                            {area.name} ({area.code}) - {area.type === "ward" ? "Phường" : area.type === "commune" ? "Xã" : "Đặc khu"}
+                            {area.isActive === false ? " (Ngừng hoạt động)" : ""}
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <p className="muted full">
@@ -1128,7 +1148,7 @@ function Badge({ shipment }: {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
             }}/>) : page === "incidents" ? (<IncidentManagement />) : page === "reports" ? (<ReportsPage />) : page === "pricing" ? (<PricingPage />) : page === "pricing-services" ? (<PricingServicesPage onNavigate={navigate} />) : page === "support" ? (<PolicyFAQPage />) : page === "dispatch" ? (<DispatchPage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
-            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
+            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
               <section className="panel"><h2>Tài khoản</h2><p>Thông tin tài khoản: {user?.name ?? "Khách"}</p></section>
             ) : (<section className="panel">
               <div className="panel-heading">
@@ -1236,12 +1256,22 @@ function Badge({ shipment }: {
             </section>)}
     </>);
     const operationsSection: OperationsSection =
-      page === "settlements" ? "settlements" : page === "routes" ? "routes" : "orders";
+      page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
     if (normalizedRole === "operations") {
       return (
         <OperationsLayout
           section={operationsSection}
-          onSectionChange={(section) => navigate(section === "orders" ? "shipments" : section === "routes" ? "routes" : "settlements")}
+          onSectionChange={(section) =>
+            navigate(
+              section === "orders"
+                ? "shipments"
+                : section === "routes"
+                ? "routes"
+                : section === "areas"
+                ? "areas"
+                : "settlements"
+            )
+          }
           userName={user?.name ?? "Operations"}
           signingOut={signingOut}
           onLogout={() => { void handleLogout(); }}

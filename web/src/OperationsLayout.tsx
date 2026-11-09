@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 
 /** Shared Operations shell. Business screens are owned by the respective feature teams. */
-export type OperationsSection = "orders" | "routes" | "staff" | "incidents" | "settlements";
+export type OperationsSection = "orders" | "routes" | "areas" | "staff" | "incidents" | "settlements";
 
 export const operationsItems: { key: OperationsSection; title: string; icon: string }[] = [
   { key: "orders", title: "Đơn hàng", icon: "▤" },
   { key: "routes", title: "Tuyến giao hàng", icon: "↔" },
+  { key: "areas", title: "Khu vực", icon: "⚑" },
   { key: "staff", title: "Nhân viên", icon: "👤" },
   { key: "incidents", title: "Khiếu nại", icon: "!" },
   { key: "settlements", title: "Đối soát COD", icon: "₫" },
@@ -17,6 +18,7 @@ function resolveCurrentSection(fallback: OperationsSection): OperationsSection {
   if (path === "/operations/staff-management") return "staff";
   if (path === "/incidents") return "incidents";
   if (path === "/operations/routes") return "routes";
+  if (path === "/operations/areas") return "areas";
   if (path === "/settlements") return "settlements";
   return fallback;
 }

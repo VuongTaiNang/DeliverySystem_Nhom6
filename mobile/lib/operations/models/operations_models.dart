@@ -330,3 +330,59 @@ class SettlementItem {
   }
 }
 
+class OperationArea {
+  final int id;
+  final String code;
+  final String name;
+  final String type; // ward, commune, special_zone
+  final bool isActive;
+  final int staffCount;
+  final int totalCapacity;
+  final int activeOrders;
+  final int availableCapacity;
+  final int waitingAssignments;
+  final bool hasCapacityAlert;
+
+  OperationArea({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.type,
+    required this.isActive,
+    this.staffCount = 0,
+    this.totalCapacity = 0,
+    this.activeOrders = 0,
+    this.availableCapacity = 0,
+    this.waitingAssignments = 0,
+    this.hasCapacityAlert = false,
+  });
+
+  factory OperationArea.fromJson(Map<String, dynamic> json) {
+    return OperationArea(
+      id: json['id'] is int
+          ? json['id'] as int
+          : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      code: json['code']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'ward',
+      isActive: json['isActive'] == true || json['isActive']?.toString() == 'true',
+      staffCount: json['staffCount'] is int
+          ? json['staffCount'] as int
+          : int.tryParse(json['staffCount']?.toString() ?? '0') ?? 0,
+      totalCapacity: json['totalCapacity'] is int
+          ? json['totalCapacity'] as int
+          : int.tryParse(json['totalCapacity']?.toString() ?? '0') ?? 0,
+      activeOrders: json['activeOrders'] is int
+          ? json['activeOrders'] as int
+          : int.tryParse(json['activeOrders']?.toString() ?? '0') ?? 0,
+      availableCapacity: json['availableCapacity'] is int
+          ? json['availableCapacity'] as int
+          : int.tryParse(json['availableCapacity']?.toString() ?? '0') ?? 0,
+      waitingAssignments: json['waitingAssignments'] is int
+          ? json['waitingAssignments'] as int
+          : int.tryParse(json['waitingAssignments']?.toString() ?? '0') ?? 0,
+      hasCapacityAlert: json['hasCapacityAlert'] == true,
+    );
+  }
+}
+
