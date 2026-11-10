@@ -18,10 +18,25 @@ export const STATUS = {
 
 export type Status = keyof typeof STATUS;
 
-export const EVENT_STATUS: Record<Status | "arrived_at_pickup" | "arrived_at_delivery", string> = {
+// Human-readable labels for both Customer tracking and Operations history.
+// Status/event codes in the API and database are not translated.
+export const EVENT_STATUS: Record<string, string> = {
   ...STATUS,
   arrived_at_pickup: "Nhân viên đã đến điểm lấy hàng",
   arrived_at_delivery: "Nhân viên đã đến điểm giao hàng",
+  assigned_staff: "Đã phân công nhân viên",
+  assignment_accepted: "Nhân viên đã nhận đơn",
+  assignment_rejected: "Nhân viên từ chối đơn",
+  assignment_cancelled: "Đã hủy phân công",
+  staff_reassigned: "Đã chuyển nhân viên phụ trách",
+  waiting_assignment: "Đang chờ phân công",
+  waiting_payment: "Đang chờ thanh toán",
+  assignment_started: "Đã bắt đầu nhiệm vụ",
+  return_complete: "Đã hoàn tất hoàn hàng",
+  order_created: "Đã tạo vận đơn",
+  shipment_created: "Đã tạo vận đơn",
+  pickup_success: "Lấy hàng thành công",
+  delivery_success: "Giao hàng thành công",
 };
 
 export type FeePayer = "shop_prepaid" | "recipient" | "deduct_cod";
