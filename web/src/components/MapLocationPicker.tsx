@@ -76,7 +76,8 @@ export default function MapLocationPicker({
     let officialErrors = 0;
     let backupErrors = 0;
     let fallbackActive = false;
-    let officialTileLoaded = false;
+    let officialTilesCompleted = false;
+    let backupUnavailable = false;
 
     function enableFallback() {
       if (fallbackActive) return;
@@ -86,23 +87,26 @@ export default function MapLocationPicker({
       backupTiles.addTo(map);
     }
 
-    officialTiles.on("tileload", () => { officialTileLoaded = true; });
+    officialTiles.on("load", () => { officialTilesCompleted = true; });
     officialTiles.on("tileerror", () => {
       if (++officialErrors >= 3) enableFallback();
     });
     backupTiles.on("tileload", () => {
-      setTileStatus("Đang dùng bản đồ dự phòng OSM France.");
+      if (!backupUnavailable) {
+        setTileStatus("Đang dùng bản đồ dự phòng OSM France.");
+      }
     });
     backupTiles.on("tileerror", () => {
       if (++backupErrors >= 3) {
-        setTileStatus("Cả hai nguồn ảnh bản đồ đều không tải được. Có thể thử lại khi đổi mạng/DNS hoặc nhập tọa độ thủ công từ Google Maps.");
+        backupUnavailable = true;
+        setTileStatus("Nguồn ảnh bản đồ dự phòng cũng bị lỗi hoặc chỉ tải một phần. Có thể đổi mạng/DNS hoặc nhập tọa độ thủ công từ Google Maps.");
       }
     });
     officialTiles.addTo(map);
 
     // A network may stall without emitting tileerror (e.g. unresolved DNS).
     const fallbackTimer = window.setTimeout(() => {
-      if (!officialTileLoaded) enableFallback();
+      if (!officialTilesCompleted) enableFallback();
     }, 7000);
     const resizeObserver = typeof ResizeObserver !== "undefined"
       ? new ResizeObserver(() => map.invalidateSize({ pan: false }))
