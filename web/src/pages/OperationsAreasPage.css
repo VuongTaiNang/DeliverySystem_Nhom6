@@ -498,3 +498,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+.ops-area-guidance {
+  margin: 16px 0 20px;
+  padding: 16px 20px;
+  border: 1px solid #d4e5d8;
+  border-radius: 12px;
+  background: #f5faf6;
+  color: #204735;
+  line-height: 1.65;
+  font-size: 13px;
+}
+.ops-area-guidance p { margin: 7px 0; }
+.ops-area-guidance small { color: #5f7569; }
