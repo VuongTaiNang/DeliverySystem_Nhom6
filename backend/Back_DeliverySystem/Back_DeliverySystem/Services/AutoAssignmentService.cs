@@ -358,7 +358,7 @@ public sealed class AutoAssignmentService : IAutoAssignmentService
 
     private async Task<DispatchChoice?> ChooseOnDemandAsync(
         Shipment shipment,
-        IReadOnlyCollection<int> rejectedStaffIds,
+        List<int> rejectedStaffIds,
         CancellationToken cancellationToken)
     {
         // A Staff can serve multiple wards for express. Capacity is the
