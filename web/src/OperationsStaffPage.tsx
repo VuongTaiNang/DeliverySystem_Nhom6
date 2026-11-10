@@ -74,7 +74,7 @@ export default function OperationsStaffPage() {
     const term = search.trim().toLocaleLowerCase("vi");
     if (!term) return staffs;
     return staffs.filter((staff) =>
-      [staff.employeeCode, staff.fullName, staff.email, staff.phone, staff.area]
+      [staff.employeeCode, staff.fullName, staff.email, staff.phone, staff.area, ...(staff.assignedAreas ?? [])]
         .join(" ")
         .toLocaleLowerCase("vi")
         .includes(term),
@@ -243,7 +243,7 @@ export default function OperationsStaffPage() {
                     <td><strong>{staff.employeeCode}</strong></td>
                     <td>{staff.fullName}</td>
                     <td><span>{staff.phone}</span><small>{staff.email}</small></td>
-                    <td>{staff.area || "Chưa phân công"}</td>
+                    <td>{staff.assignedAreas?.length ? staff.assignedAreas.join(", ") : "Chưa phân công khu vực hoạt động"}</td>
                     <td>
                       <select
                         aria-label={`Trạng thái ${staff.fullName}`}
@@ -300,7 +300,7 @@ export default function OperationsStaffPage() {
               <label>Số điện thoại
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} inputMode="numeric" maxLength={10} required />
               </label>
-              <label>Khu vực
+              <label>Ghi chú khu vực cũ (không dùng để tự phân công)
                 <input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} maxLength={150} placeholder="Ví dụ: Quận 7" />
               </label>
               {!editStaff && (
