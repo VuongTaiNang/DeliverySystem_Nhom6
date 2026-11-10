@@ -21,6 +21,8 @@ type GeocodingResult = {
   latitude: number;
   longitude: number;
   displayName?: string;
+  source?: "nominatim" | "photon";
+  approximate?: boolean;
 };
 
 const DEFAULT_CENTER: L.LatLngExpression = [10.7769, 106.7009];
@@ -41,6 +43,7 @@ export default function MapLocationPicker({
 
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [locationHint, setLocationHint] = useState("");
 
   useEffect(() => {
     if (!elementRef.current || mapRef.current) return;
@@ -55,7 +58,7 @@ export default function MapLocationPicker({
     );
 
     L.tileLayer(
-      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
         maxZoom: 19,
         attribution:
@@ -64,6 +67,8 @@ export default function MapLocationPicker({
     ).addTo(map);
 
     map.on("click", (event: L.LeafletMouseEvent) => {
+      setSearchError("");
+      setLocationHint("Đã đánh dấu thủ công. Hãy kiểm tra điểm ghim đúng vị trí thực tế.");
       onChangeRef.current({
         latitude: Number(event.latlng.lat.toFixed(7)),
         longitude: Number(event.latlng.lng.toFixed(7)),
@@ -131,6 +136,7 @@ export default function MapLocationPicker({
 
     setSearching(true);
     setSearchError("");
+    setLocationHint("");
 
     try {
       const result = await request<GeocodingResult>(
@@ -143,6 +149,11 @@ export default function MapLocationPicker({
       };
 
       onChangeRef.current(coordinate);
+      setLocationHint(
+        result.approximate
+          ? "Kết quả tìm kiếm chỉ là vị trí ước tính. Hãy kiểm tra ghim trên bản đồ và nhấp lại nếu chưa đúng số nhà."
+          : "Đã tìm thấy tọa độ. Hãy kiểm tra ghim trên bản đồ trước khi tính phí.",
+      );
 
       mapRef.current?.setView(
         [coordinate.latitude, coordinate.longitude],
@@ -154,6 +165,7 @@ export default function MapLocationPicker({
           ? error.message
           : "Không thể tìm địa chỉ.",
       );
+      setLocationHint("Bạn vẫn có thể phóng to và nhấp trực tiếp lên bản đồ để chọn tọa độ.");
     } finally {
       setSearching(false);
     }
@@ -165,7 +177,7 @@ export default function MapLocationPicker({
         <strong>{label}</strong>
 
         <span>
-          Nhập địa chỉ rồi tìm, hoặc nhấn trực tiếp trên bản đồ
+          Nhập địa chỉ để tìm, hoặc phóng to và nhấp trực tiếp vào điểm giao/lấy hàng
         </span>
       </div>
 
@@ -188,10 +200,11 @@ export default function MapLocationPicker({
       </div>
 
       {searchError && (
-        <p className="map-picker__error">
+        <p className="map-picker__error" role="alert">
           {searchError}
         </p>
       )}
+      {locationHint && <p className="map-picker__hint" role="status">{locationHint}</p>}
 
       <div
         className="map-picker__map"
@@ -206,7 +219,7 @@ export default function MapLocationPicker({
             Kinh độ: <code>{value.longitude}</code>
           </>
         ) : (
-          "Chưa chọn vị trí"
+          "Chưa chọn vị trí – hãy nhấp vào bản đồ để đánh dấu điểm lấy/giao hàng."
         )}
       </div>
     </section>
