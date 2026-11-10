@@ -780,3 +780,9 @@ label { display: grid; gap: 9px; font-size: 12px; font-weight: 500; }
   font-size: 13px;
   line-height: 1.6;
 }
+
+.quote-inline-notice.is-info {
+  border-color: #b9d9c5;
+  background: #f1faf4;
+  color: #165638;
+}
