@@ -380,6 +380,7 @@ function Badge({ shipment }: {
     const [shipments, setShipments] = useState<Shipment[]>([]);
     const [form, setForm] = useState<ShipmentInput>(emptyForm);
     const [quote, setQuote] = useState<Quote | null>(null);
+    const [quoteError, setQuoteError] = useState<string | null>(null);
     const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
     const [areasLoading, setAreasLoading] = useState(false);
     const [areasError, setAreasError] = useState("");
@@ -602,6 +603,7 @@ function Badge({ shipment }: {
             return next;
         });
         setQuote(null);
+        setQuoteError(null);
     }
     function openShipment(shipment: Shipment) {
         setSelectedId(shipment.id);
@@ -610,30 +612,44 @@ function Badge({ shipment }: {
     }
     function submitQuote(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        setQuoteError(null);
+        const rejectQuote = (message: string) => {
+            setQuoteError(message);
+            setNotice({ kind: "error", text: message });
+        };
         if (user && !form.deliveryAreaId) {
-            setNotice({ kind: "error", text: "Vui lòng chọn phường/xã giao hàng để hệ thống tự phân công Staff." });
+            rejectQuote("Vui lòng chọn phường/xã giao hàng để hệ thống tự phân công Staff.");
             return;
         }
         if (form.pickupAreaId) {
             const area = serviceAreas.find((item) => item.id === form.pickupAreaId);
             if (area && !areaNameMatchesAddress(form.pickupAddress, area)) {
-                setNotice({ kind: "error", text: `Địa chỉ lấy hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                rejectQuote(`Địa chỉ lấy hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.`);
                 return;
             }
         }
         if (form.deliveryAreaId) {
             const area = serviceAreas.find((item) => item.id === form.deliveryAreaId);
             if (area && !areaNameMatchesAddress(form.deliveryAddress, area)) {
-                setNotice({ kind: "error", text: `Địa chỉ giao hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                rejectQuote(`Địa chỉ giao hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.`);
                 return;
             }
         }
         if (form.pickupLatitude == null || form.pickupLongitude == null ||
             form.deliveryLatitude == null || form.deliveryLongitude == null) {
-            setNotice({ kind: "error", text: "Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá." });
+            rejectQuote("Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá. Bạn có thể nhấp trực tiếp lên bản đồ khi tìm địa chỉ bị lỗi.");
             return;
         }
-        void run(async () => setQuote(await api.quote(form)));
+        void run(async () => {
+            try {
+                const calculated = await api.quote(form);
+                setQuote(calculated);
+                setQuoteError(null);
+            } catch (error) {
+                setQuoteError(error instanceof Error ? error.message : "Không tính được phí vận chuyển.");
+                throw error;
+            }
+        });
     }
     const selected = shipments.find((item) => item.id === selectedId);
     const filtered = shipments.filter((item) => {
@@ -1031,6 +1047,7 @@ function Badge({ shipment }: {
                           }));
 
                           setQuote(null);
+                          setQuoteError(null);
                         }}
                         />
                     </div>
@@ -1056,6 +1073,7 @@ function Badge({ shipment }: {
                           }));
 
                           setQuote(null);
+                          setQuoteError(null);
                         }}
                       />
                     </div>
@@ -1136,6 +1154,14 @@ function Badge({ shipment }: {
                   </label>
                 </div>
 
+                {!quote && (quoteError || form.pickupLatitude == null ||
+                  form.pickupLongitude == null || form.deliveryLatitude == null ||
+                  form.deliveryLongitude == null) && (
+                    <div className="quote-inline-notice" role="status">
+                      {quoteError ||
+                        "Chưa đủ tọa độ để tính phí: hãy phóng to và nhấp vào cả bản đồ lấy hàng lẫn bản đồ giao hàng (hoặc dùng nút Tìm trên bản đồ)."}
+                    </div>
+                )}
                 <div className="form-footer">
                   <div>
                     <strong>
