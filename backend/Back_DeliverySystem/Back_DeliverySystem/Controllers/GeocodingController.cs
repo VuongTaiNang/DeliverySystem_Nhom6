@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 
 namespace Back_DeliverySystem.Controllers;
@@ -103,6 +104,31 @@ public class GeocodingController : ControllerBase
             }
         }
 
+        // OSM search indexes may still use old ward names after administrative
+        // changes. If the complete address is not found, try only the street
+        // in Ho Chi Minh City. Mark its coordinate approximate and require the
+        // user to check the pin; never claim it is the exact house number.
+        if (result == null)
+        {
+            var simplified = SimplifyHcmStreetQuery(keyword);
+            if (!string.IsNullOrWhiteSpace(simplified))
+            {
+                try
+                {
+                    result = await LookupPhotonAsync(simplified, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception error) when (error is HttpRequestException
+                    or OperationCanceledException or JsonException or IOException)
+                {
+                    // Public geocoding is unavailable: return a clear 503.
+                }
+            }
+        }
+
         if (result == null)
         {
             return StatusCode(503, new
@@ -138,7 +164,7 @@ public class GeocodingController : ControllerBase
                 Uri.EscapeDataString(keyword);
 
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(TimeSpan.FromSeconds(4));
+            budget.CancelAfter(TimeSpan.FromSeconds(3));
             using var response = await Client.GetAsync(url, budget.Token);
             if (!response.IsSuccessStatusCode) return null;
 
@@ -160,9 +186,11 @@ public class GeocodingController : ControllerBase
 
             var name = first.TryGetProperty("display_name", out var display)
                 ? display.GetString() ?? keyword : keyword;
+            var exactAddressLevel = first.TryGetProperty("addresstype", out var addrType) &&
+                (addrType.GetString() == "house" || addrType.GetString() == "building");
             return new GeocodePoint(
                 Math.Round(lat, 7), Math.Round(lon, 7),
-                name, "nominatim", false);
+                name, "nominatim", !exactAddressLevel);
         }
         finally
         {
@@ -178,7 +206,7 @@ public class GeocodingController : ControllerBase
         var url = "https://photon.komoot.io/api/?limit=5&lat=10.7769&lon=106.7009&q=" +
             Uri.EscapeDataString(keyword);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        budget.CancelAfter(TimeSpan.FromSeconds(5));
+        budget.CancelAfter(TimeSpan.FromSeconds(4));
         using var response = await Client.GetAsync(url, budget.Token);
         if (!response.IsSuccessStatusCode) return null;
 
@@ -196,7 +224,9 @@ public class GeocodingController : ControllerBase
                 coords.ValueKind != JsonValueKind.Array || coords.GetArrayLength() < 2 ||
                 !coords[0].TryGetDouble(out var lon) ||
                 !coords[1].TryGetDouble(out var lat) ||
-                !InVietnam(lat, lon))
+                !InVietnam(lat, lon) ||
+                (IsHcmAddress(keyword) &&
+                 !(lat is >= 10.2 and <= 11.3 && lon is >= 106.3 and <= 107.5)))
                 continue;
 
             var props = feature.GetProperty("properties");
@@ -221,6 +251,30 @@ public class GeocodingController : ControllerBase
                 name, "photon", true);
         }
         return null;
+    }
+
+    private static bool IsHcmAddress(string address) =>
+        address.Contains("TP.HCM", StringComparison.OrdinalIgnoreCase) ||
+        address.Contains("Hồ Chí Minh", StringComparison.OrdinalIgnoreCase) ||
+        address.Contains("Ho Chi Minh", StringComparison.OrdinalIgnoreCase) ||
+        address.Contains("HCM", StringComparison.OrdinalIgnoreCase);
+
+    private static string? SimplifyHcmStreetQuery(string address)
+    {
+        if (!IsHcmAddress(address)) return null;
+        var parts = address.Split(',', StringSplitOptions.TrimEntries |
+                                       StringSplitOptions.RemoveEmptyEntries);
+        var street = parts.FirstOrDefault(part =>
+            Regex.IsMatch(part, @"(?:đường|duong|street)\s+", RegexOptions.IgnoreCase));
+        if (string.IsNullOrWhiteSpace(street)) return null;
+
+        // Keep the street name, but do not geocode the guessed house number.
+        street = Regex.Replace(street, @"^\d+[\w/-]*\s+", "");
+        street = Regex.Replace(street, @"^(?:đường|duong)\s+", "",
+            RegexOptions.IgnoreCase);
+        return street.Length >= 4
+            ? $"{street}, Thành phố Hồ Chí Minh, Việt Nam"
+            : null;
     }
 
     private static bool InVietnam(double lat, double lon) =>
