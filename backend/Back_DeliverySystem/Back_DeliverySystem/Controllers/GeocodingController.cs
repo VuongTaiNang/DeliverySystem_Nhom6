@@ -32,6 +32,18 @@ public class GeocodingController : ControllerBase
         return client;
     }
 
+    // This endpoint confirms that the current Backend version is running,
+    // without making a network call to an external geocoder.
+    [AllowAnonymous]
+    [HttpGet("capabilities")]
+    public IActionResult Capabilities() => Ok(new
+    {
+        version = "2026-11-10-fallback-v2",
+        providers = new[] { "Nominatim", "Photon" },
+        manualCoordinates = true,
+        userInitiatedSearchOnly = true
+    });
+
     [AllowAnonymous]
     [HttpGet("search")]
     public async Task<IActionResult> Search(
@@ -60,10 +72,14 @@ public class GeocodingController : ControllerBase
         {
             throw;
         }
-        catch (Exception error) when (error is HttpRequestException
-            or TaskCanceledException or JsonException or IOException)
+        catch (OperationCanceledException)
         {
-            // DNS/timeout/provider failure: try a different provider.
+            // Provider timed out; continue to the next geocoder.
+        }
+        catch (Exception error) when (error is HttpRequestException
+            or JsonException or IOException)
+        {
+            // DNS/provider failure: try a different geocoder.
         }
 
         if (result == null)
@@ -76,8 +92,12 @@ public class GeocodingController : ControllerBase
             {
                 throw;
             }
+            catch (OperationCanceledException)
+            {
+                // Photon timed out. User may select the location manually.
+            }
             catch (Exception error) when (error is HttpRequestException
-                or TaskCanceledException or JsonException or IOException)
+                or JsonException or IOException)
             {
                 // Public demo providers can both be unreachable.
             }
