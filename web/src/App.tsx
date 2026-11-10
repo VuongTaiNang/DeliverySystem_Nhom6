@@ -1090,6 +1090,7 @@ function Badge({ shipment }: {
 
                           setQuote(null);
                           setQuoteError(null);
+                          setQuoteInfo("");
                         }}
                         />
                     </div>
@@ -1116,6 +1117,7 @@ function Badge({ shipment }: {
 
                           setQuote(null);
                           setQuoteError(null);
+                          setQuoteInfo("");
                         }}
                       />
                     </div>
@@ -1196,7 +1198,7 @@ function Badge({ shipment }: {
                   </label>
                 </div>
 
-                {!quote && (quoteError || form.pickupLatitude == null ||
+                {!quote && (quoteError || quoteInfo || form.pickupLatitude == null ||
                   form.pickupLongitude == null || form.deliveryLatitude == null ||
                   form.deliveryLongitude == null) && (
                     <div className={`quote-inline-notice${!quoteError ? " is-info" : ""}`} role="status">
