@@ -228,7 +228,33 @@ namespace Back_DeliverySystem.Controllers
                 )
                 .ToListAsync();
 
-            return Ok(staffs);
+            // Display authoritative active StaffArea assignments, rather
+            // than legacy Staff.Area text (which can be stale, e.g. "Quận 7").
+            var activeStaffAreas = await _context.StaffAreas.AsNoTracking()
+                .Where(x => x.IsActive && x.Area.IsActive)
+                .Select(x => new { x.StaffId, AreaName = x.Area.Name })
+                .ToListAsync();
+            var areaNamesByStaff = activeStaffAreas
+                .GroupBy(x => x.StaffId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(x => x.AreaName).Distinct().ToArray());
+
+            return Ok(staffs.Select(staff => new
+            {
+                staff.id,
+                staff.employeeCode,
+                staff.userId,
+                staff.fullName,
+                staff.email,
+                staff.phone,
+                staff.area, // Legacy editable description; not a dispatch rule.
+                assignedAreas = areaNamesByStaff.GetValueOrDefault(staff.id) ?? Array.Empty<string>(),
+                staff.status,
+                staff.isAvailable,
+                staff.role,
+                staff.createdAt
+            }));
         }
 
         // =========================================================
