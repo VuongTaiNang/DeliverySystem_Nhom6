@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { request } from "../lib/http";
+import { geocodeAddress } from "../lib/geocoding";
 import "./MapLocationPicker.css";
 
 export type MapCoordinate = {
@@ -15,14 +15,6 @@ type Props = {
   value: MapCoordinate | null;
   onChange: (coordinate: MapCoordinate) => void;
   color?: string;
-};
-
-type GeocodingResult = {
-  latitude: number;
-  longitude: number;
-  displayName?: string;
-  source?: "nominatim" | "photon";
-  approximate?: boolean;
 };
 
 const DEFAULT_CENTER: L.LatLngExpression = [10.7769, 106.7009];
@@ -44,6 +36,9 @@ export default function MapLocationPicker({
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [locationHint, setLocationHint] = useState("");
+  const [tileStatus, setTileStatus] = useState("");
+  const [manualCoordinates, setManualCoordinates] = useState("");
+  const [manualError, setManualError] = useState("");
 
   useEffect(() => {
     if (!elementRef.current || mapRef.current) return;
@@ -57,14 +52,62 @@ export default function MapLocationPicker({
       value ? 15 : 12,
     );
 
-    L.tileLayer(
+    // Leaflet can render, pan and zoom even when a tile provider is offline.
+    // Try the official OSM tiles first, and switch once to OSM France if
+    // repeated tile errors occur. Both providers are intended for light demo
+    // traffic only and have their own usage rules.
+    const officialTiles = L.tileLayer(
       "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
         maxZoom: 19,
         attribution:
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       },
-    ).addTo(map);
+    );
+    const backupTiles = L.tileLayer(
+      "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
+      {
+        subdomains: "abc",
+        maxZoom: 20,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · <a href="https://www.openstreetmap.fr/">OSM France</a>',
+      },
+    );
+    let officialErrors = 0;
+    let backupErrors = 0;
+    let fallbackActive = false;
+    let officialTileLoaded = false;
+
+    function enableFallback() {
+      if (fallbackActive) return;
+      fallbackActive = true;
+      map.removeLayer(officialTiles);
+      setTileStatus("Nguồn ảnh OpenStreetMap đang lỗi; đang chuyển sang OSM France...");
+      backupTiles.addTo(map);
+    }
+
+    officialTiles.on("tileload", () => { officialTileLoaded = true; });
+    officialTiles.on("tileerror", () => {
+      if (++officialErrors >= 3) enableFallback();
+    });
+    backupTiles.on("tileload", () => {
+      setTileStatus("Đang dùng bản đồ dự phòng OSM France.");
+    });
+    backupTiles.on("tileerror", () => {
+      if (++backupErrors >= 3) {
+        setTileStatus("Cả hai nguồn ảnh bản đồ đều không tải được. Có thể thử lại khi đổi mạng/DNS hoặc nhập tọa độ thủ công từ Google Maps.");
+      }
+    });
+    officialTiles.addTo(map);
+
+    // A network may stall without emitting tileerror (e.g. unresolved DNS).
+    const fallbackTimer = window.setTimeout(() => {
+      if (!officialTileLoaded) enableFallback();
+    }, 7000);
+    const resizeObserver = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(() => map.invalidateSize({ pan: false }))
+      : null;
+    if (elementRef.current) resizeObserver?.observe(elementRef.current);
 
     map.on("click", (event: L.LeafletMouseEvent) => {
       setSearchError("");
@@ -82,6 +125,8 @@ export default function MapLocationPicker({
     }, 0);
 
     return () => {
+      window.clearTimeout(fallbackTimer);
+      resizeObserver?.disconnect();
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -139,9 +184,7 @@ export default function MapLocationPicker({
     setLocationHint("");
 
     try {
-      const result = await request<GeocodingResult>(
-        `/geocoding/search?q=${encodeURIComponent(keyword)}`,
-      );
+      const result = await geocodeAddress(keyword);
 
       const coordinate = {
         latitude: Number(result.latitude.toFixed(7)),
@@ -169,6 +212,32 @@ export default function MapLocationPicker({
     } finally {
       setSearching(false);
     }
+  }
+
+  function applyManualCoordinates() {
+    const pieces = manualCoordinates.trim()
+      .replace(/[()]/g, "")
+      .split(/[,;\s]+/)
+      .filter(Boolean);
+    const latitude = Number(pieces[0]);
+    const longitude = Number(pieces[1]);
+    if (
+      pieces.length !== 2 || !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 || latitude > 90 ||
+      longitude < -180 || longitude > 180
+    ) {
+      setManualError("Nhập theo dạng: 10.7769, 106.7009 (vĩ độ, kinh độ).");
+      return;
+    }
+    setManualError("");
+    setSearchError("");
+    setLocationHint("Đã nhập tọa độ thủ công. Hãy kiểm tra chính xác địa chỉ giao/lấy hàng.");
+    onChangeRef.current({
+      latitude: Number(latitude.toFixed(7)),
+      longitude: Number(longitude.toFixed(7)),
+    });
+    mapRef.current?.setView([latitude, longitude], 16);
   }
 
   return (
@@ -205,6 +274,7 @@ export default function MapLocationPicker({
         </p>
       )}
       {locationHint && <p className="map-picker__hint" role="status">{locationHint}</p>}
+      {tileStatus && <p className="map-picker__hint" role="status">{tileStatus}</p>}
 
       <div
         className="map-picker__map"
@@ -222,6 +292,22 @@ export default function MapLocationPicker({
           "Chưa chọn vị trí – hãy nhấp vào bản đồ để đánh dấu điểm lấy/giao hàng."
         )}
       </div>
+      <details className="map-picker__manual">
+        <summary>Nếu không tải được bản đồ, nhập tọa độ từ Google Maps</summary>
+        <div className="map-picker__manual-row">
+          <input
+            type="text"
+            value={manualCoordinates}
+            placeholder="Ví dụ: 10.7769, 106.7009"
+            aria-label={`Tọa độ thủ công cho ${label}`}
+            onChange={(event) => setManualCoordinates(event.target.value)}
+          />
+          <button type="button" onClick={applyManualCoordinates}>
+            Dùng tọa độ này
+          </button>
+        </div>
+        {manualError && <p className="map-picker__error" role="alert">{manualError}</p>}
+      </details>
     </section>
   );
 }
