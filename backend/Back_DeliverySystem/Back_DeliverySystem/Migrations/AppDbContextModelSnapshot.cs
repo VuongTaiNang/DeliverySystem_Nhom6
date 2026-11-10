@@ -840,6 +840,51 @@ namespace Back_DeliverySystem.Migrations
                     b.ToTable("StaffAreas");
                 });
 
+            modelBuilder.Entity("Back_DeliverySystem.Models.StaffLocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<double?>("AccuracyMeters")
+                        .HasColumnType("float");
+
+                    b.Property<int>("AssignmentId")
+                        .HasColumnType("int");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("float");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("float");
+
+                    b.Property<string>("ShipmentId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("StaffId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.HasIndex("ShipmentId");
+
+                    b.HasIndex("StaffId")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.ToTable("StaffLocations");
+                });
+
             modelBuilder.Entity("Back_DeliverySystem.Models.User", b =>
                 {
                     b.Property<int>("Id")
@@ -1044,6 +1089,27 @@ namespace Back_DeliverySystem.Migrations
                     b.Navigation("Area");
 
                     b.Navigation("Staff");
+                });
+
+            modelBuilder.Entity("Back_DeliverySystem.Models.StaffLocation", b =>
+                {
+                    b.HasOne("Back_DeliverySystem.Models.DeliveryAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Back_DeliverySystem.Models.Shipment", null)
+                        .WithMany()
+                        .HasForeignKey("ShipmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Back_DeliverySystem.Models.Staff", null)
+                        .WithMany()
+                        .HasForeignKey("StaffId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Back_DeliverySystem.Models.Area", b =>
