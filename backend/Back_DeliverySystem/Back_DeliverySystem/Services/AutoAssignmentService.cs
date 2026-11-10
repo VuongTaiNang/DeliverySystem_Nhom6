@@ -235,56 +235,74 @@ public sealed class AutoAssignmentService : IAutoAssignmentService
                 );
             }
 
+            // One Staff may serve multiple wards. The selected ward's local
+            // capacity is NOT an independent pool of free jobs. Count all
+            // active assignments across all wards before selecting a Staff.
+            // Until Staff has its own global capacity column, use the
+            // highest configured active StaffArea capacity as a conservative
+            // per-Staff ceiling (rather than summing capacities across wards).
+            var staffIds = staffAreas.Select(x => x.StaffId).Distinct().ToList();
+
             var activeCounts = await (
-                    from existingAssignment in _db.DeliveryAssignments
-                    join assignedShipment in _db.Shipments
+                    from existingAssignment in _db.DeliveryAssignments.AsNoTracking()
+                    join assignedShipment in _db.Shipments.AsNoTracking()
                         on existingAssignment.ShipmentId equals assignedShipment.Id
                     where existingAssignment.IsActive &&
-                          assignedShipment.DeliveryAreaId == areaId
-                    group existingAssignment by existingAssignment.StaffId
-                    into grouped
+                          assignedShipment.DeliveryAreaId == areaId &&
+                          staffIds.Contains(existingAssignment.StaffId)
+                    group existingAssignment by existingAssignment.StaffId into grouped
                     select new
                     {
                         StaffId = grouped.Key,
                         Count = grouped.Count()
                     }
                 )
-                .ToDictionaryAsync(
-                    x => x.StaffId,
-                    x => x.Count,
-                    cancellationToken
-                );
+                .ToDictionaryAsync(x => x.StaffId, x => x.Count, cancellationToken);
+
+            var globalActiveCounts = await _db.DeliveryAssignments.AsNoTracking()
+                .Where(x => x.IsActive && staffIds.Contains(x.StaffId))
+                .GroupBy(x => x.StaffId)
+                .Select(grouped => new { StaffId = grouped.Key, Count = grouped.Count() })
+                .ToDictionaryAsync(x => x.StaffId, x => x.Count, cancellationToken);
+
+            var globalCapacity = await _db.StaffAreas.AsNoTracking()
+                .Where(x => x.IsActive && staffIds.Contains(x.StaffId))
+                .GroupBy(x => x.StaffId)
+                .Select(grouped => new
+                {
+                    StaffId = grouped.Key,
+                    Capacity = grouped.Max(x => x.MaxActiveOrders)
+                })
+                .ToDictionaryAsync(x => x.StaffId, x => x.Capacity, cancellationToken);
 
             var candidates = staffAreas
                 .Select(x => new
                 {
                     StaffArea = x,
-                    ActiveOrders = activeCounts.TryGetValue(
-                        x.StaffId,
-                        out var count
-                    )
-                        ? count
-                        : 0
+                    AreaOrders = activeCounts.GetValueOrDefault(x.StaffId),
+                    TotalActiveOrders = globalActiveCounts.GetValueOrDefault(x.StaffId),
+                    GlobalCapacity = globalCapacity.GetValueOrDefault(x.StaffId)
                 })
                 .ToList();
 
             var candidate = candidates
                 .Where(x =>
                     x.StaffArea.MaxActiveOrders > 0 &&
-                    x.ActiveOrders < x.StaffArea.MaxActiveOrders
+                    x.GlobalCapacity > 0 &&
+                    x.AreaOrders < x.StaffArea.MaxActiveOrders &&
+                    x.TotalActiveOrders < x.GlobalCapacity
                 )
-                .OrderBy(x =>
-                    (double)x.ActiveOrders /
-                    x.StaffArea.MaxActiveOrders
-                )
-                .ThenBy(x => x.ActiveOrders)
+                // Compare total workload first, then ward workload.
+                .OrderBy(x => (double)x.TotalActiveOrders / x.GlobalCapacity)
+                .ThenBy(x => (double)x.AreaOrders / x.StaffArea.MaxActiveOrders)
+                .ThenBy(x => x.TotalActiveOrders)
                 .ThenBy(x => x.StaffArea.StaffId)
                 .FirstOrDefault();
 
             if (candidate == null)
             {
-                var totalActiveOrders = candidates.Sum(x => x.ActiveOrders);
-                var totalCapacity = candidates.Sum(x => x.StaffArea.MaxActiveOrders);
+                var totalActiveOrders = candidates.Sum(x => x.TotalActiveOrders);
+                var totalCapacity = candidates.Sum(x => x.GlobalCapacity);
                 var reason =
                     $"Tất cả Staff tại {area.Name} đã đạt giới hạn đơn đang xử lý.";
 
@@ -329,7 +347,8 @@ public sealed class AutoAssignmentService : IAutoAssignmentService
                     $"[{(dispatchMode == ServiceDispatchPolicy.PriorityArea ? "Giao nhanh - ưu tiên khu vực" : "Tiêu chuẩn - theo khu vực/tuyến")}] " +
                     $"Hệ thống tự động phân công {candidate.StaffArea.Staff.EmployeeCode} " +
                     $"cho khu vực {area.Name} " +
-                    $"({candidate.ActiveOrders + 1}/{candidate.StaffArea.MaxActiveOrders} đơn)."
+                    $"(tải toàn bộ phường: {candidate.TotalActiveOrders + 1}/{candidate.GlobalCapacity} đơn; " +
+                    $"tại {area.Name}: {candidate.AreaOrders + 1}/{candidate.StaffArea.MaxActiveOrders} đơn)."
             });
 
             await _db.SaveChangesAsync(cancellationToken);
@@ -342,8 +361,8 @@ public sealed class AutoAssignmentService : IAutoAssignmentService
                     : "Tiêu chuẩn: phân công theo khu vực và tải hiện tại (có thể gom vào tuyến).",
                 candidate.StaffArea.StaffId,
                 areaId,
-                candidate.ActiveOrders + 1,
-                candidate.StaffArea.MaxActiveOrders
+                candidate.TotalActiveOrders + 1,
+                candidate.GlobalCapacity
             );
         }
         catch
