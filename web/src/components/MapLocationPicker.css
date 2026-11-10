@@ -77,3 +77,36 @@
     width: 100%;
   }
 }
+
+.map-picker__manual {
+  padding: 10px 12px;
+  border: 1px solid #d9e2dc;
+  background: #f7faf7;
+  border-radius: 10px;
+  color: #315b48;
+  font-size: 13px;
+}
+
+.map-picker__manual summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.map-picker__manual-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.map-picker__manual-row input {
+  flex: 1 1 210px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d9e2dc;
+  border-radius: 8px;
+}
+
+.map-picker__manual-row button {
+  flex: 0 0 auto;
+}
