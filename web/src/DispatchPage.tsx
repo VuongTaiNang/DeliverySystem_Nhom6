@@ -1199,7 +1199,7 @@ const [cancelReason, setCancelReason] = useState("");
                         <td>{money(item.codAmount)}</td>
                         <td>
                           <div>{money(item.fee)}</div>
-                          <small className="muted">{item.feePayer}</small>
+                          <small className="muted">{feePayerLabel(item.feePayer)}</small>
                         </td>
                         <td>
                           <span className={`badge ${item.status}`}>
@@ -1735,7 +1735,7 @@ const [cancelReason, setCancelReason] = useState("");
             <form onSubmit={handleConfirmAssign}>
               <div className="ops-modal-body">
   <div>
-    <span className="muted">Shipment ID:</span>
+    <span className="muted">Mã vận đơn:</span>
 
     <div
       className="tracking-code"
@@ -1815,7 +1815,7 @@ const [cancelReason, setCancelReason] = useState("");
         >
           <div className="ops-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ops-modal-header">
-              <h3>Chuyển phân công nhân viên (Reassign)</h3>
+              <h3>Đổi nhân viên phụ trách</h3>
               <button
                 type="button"
                 className="ops-modal-close"
@@ -1829,7 +1829,7 @@ const [cancelReason, setCancelReason] = useState("");
             <form onSubmit={handleConfirmReassign}>
               <div className="ops-modal-body">
                 <div>
-                  <span className="muted">Shipment ID:</span>
+                  <span className="muted">Mã vận đơn:</span>
                   <div className="tracking-code" style={{ fontSize: "16px", marginTop: "4px" }}>
                     <strong>{reassignModalShipmentId}</strong>
                   </div>
