@@ -25,6 +25,7 @@ import SettlementsPage from "./SettlementsPage";
 import MapLocationPicker from "./components/MapLocationPicker";
 import { geocodeAddress } from "./lib/geocoding";
 import OperationsDashboard from "./OperationsDashboard";
+const OperationsShipmentsPage = lazy(() => import("./pages/OperationsShipmentsPage"));
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
 const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
 
@@ -1401,7 +1402,9 @@ function Badge({ shipment }: {
           )}
            {page === "dashboard" && normalizedRole === "operations"
             ? <OperationsDashboard />
-            : renderContent}
+            : page === "shipments"
+              ? <Suspense fallback={<section className="panel"><p role="status">Đang tải danh sách vận đơn…</p></section>}><OperationsShipmentsPage /></Suspense>
+              : renderContent}
         </OperationsLayout>
       );
     }
