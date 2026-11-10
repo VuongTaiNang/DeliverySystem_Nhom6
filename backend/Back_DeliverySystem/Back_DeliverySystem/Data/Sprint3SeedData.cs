@@ -34,6 +34,70 @@ public static class Sprint3SeedData
                 Type = "ward",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-VUON-LAI",
+                Name = "Phường Vườn Lài",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-DIEN-HONG",
+                Name = "Phường Diên Hồng",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-BAN-CO",
+                Name = "Phường Bàn Cờ",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-XUAN-HOA",
+                Name = "Phường Xuân Hòa",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-NHIEU-LOC",
+                Name = "Phường Nhiêu Lộc",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-BAY-HIEN",
+                Name = "Phường Bảy Hiền",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-TAN-SON-HOA",
+                Name = "Phường Tân Sơn Hòa",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new Area
+            {
+                Code = "HCM-TAN-SON-NHAT",
+                Name = "Phường Tân Sơn Nhất",
+                Type = "ward",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
             }
         };
 
@@ -71,12 +135,10 @@ public static class Sprint3SeedData
 
         await EnsureStaffAreaAsync(context, staffs[0].Id, hoaHung.Id, 3);
         await EnsureStaffAreaAsync(context, staffs[0].Id, tanHoa.Id, 4);
-        staffs[0].Area = "Phường Hòa Hưng, Phường Tân Hòa";
 
         if (staffs.Count >= 2)
         {
             await EnsureStaffAreaAsync(context, staffs[1].Id, hoaHung.Id, 5);
-            staffs[1].Area = "Phường Hòa Hưng";
         }
 
         await context.SaveChangesAsync();
@@ -104,8 +166,8 @@ public static class Sprint3SeedData
             return;
         }
 
-        staffArea.MaxActiveOrders = maxActiveOrders;
-        staffArea.IsActive = true;
+        // Existing StaffArea assignments are managed by Operations (#24).
+        // Do not reset their capacity or enabled state on each API restart.
     }
 
     private static async Task BackfillAssignmentSourcesAsync(AppDbContext context)
