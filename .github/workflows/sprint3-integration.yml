@@ -22,6 +22,12 @@ jobs:
           dotnet-version: '9.0.x'
       - run: dotnet restore backend/Back_DeliverySystem/Back_DeliverySystem/Back_DeliverySystem.csproj
       - run: dotnet build backend/Back_DeliverySystem/Back_DeliverySystem/Back_DeliverySystem.csproj --configuration Release --no-restore
+      - name: Verify EF Core migration snapshot matches code
+        env:
+          Jwt__Key: "ci-only-test-key-32-plus-chars-please-never-use-in-production"
+        run: |
+          dotnet tool install --global dotnet-ef --version 9.0.15
+          dotnet ef migrations has-pending-model-changes --project backend/Back_DeliverySystem/Back_DeliverySystem/Back_DeliverySystem.csproj --no-build --configuration Release
 
   web-build:
     name: Build React Web
