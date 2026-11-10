@@ -23,6 +23,7 @@ import type { UserRole } from "./api";
 import DispatchPage from "./DispatchPage";
 import SettlementsPage from "./SettlementsPage";
 import MapLocationPicker from "./components/MapLocationPicker";
+import { geocodeAddress } from "./lib/geocoding";
 import OperationsDashboard from "./OperationsDashboard";
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
 const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
@@ -381,6 +382,7 @@ function Badge({ shipment }: {
     const [form, setForm] = useState<ShipmentInput>(emptyForm);
     const [quote, setQuote] = useState<Quote | null>(null);
     const [quoteError, setQuoteError] = useState<string | null>(null);
+    const [quoteInfo, setQuoteInfo] = useState("");
     const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
     const [areasLoading, setAreasLoading] = useState(false);
     const [areasError, setAreasError] = useState("");
@@ -604,6 +606,7 @@ function Badge({ shipment }: {
         });
         setQuote(null);
         setQuoteError(null);
+        setQuoteInfo("");
     }
     function openShipment(shipment: Shipment) {
         setSelectedId(shipment.id);
@@ -613,6 +616,7 @@ function Badge({ shipment }: {
     function submitQuote(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setQuoteError(null);
+        setQuoteInfo("");
         const rejectQuote = (message: string) => {
             setQuoteError(message);
             setNotice({ kind: "error", text: message });
@@ -635,9 +639,47 @@ function Badge({ shipment }: {
                 return;
             }
         }
+        // If the user entered full addresses but didn't select the map pins,
+        // locate each missing point on demand. Do NOT silently assume the
+        // center of a ward is the actual pickup/delivery address.
         if (form.pickupLatitude == null || form.pickupLongitude == null ||
             form.deliveryLatitude == null || form.deliveryLongitude == null) {
-            rejectQuote("Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá. Bạn có thể nhấp trực tiếp lên bản đồ khi tìm địa chỉ bị lỗi.");
+            void run(async () => {
+                const missing = [
+                    { kind: "pickup" as const, address: form.pickupAddress },
+                    { kind: "delivery" as const, address: form.deliveryAddress },
+                ].filter((item) => item.kind === "pickup"
+                    ? form.pickupLatitude == null || form.pickupLongitude == null
+                    : form.deliveryLatitude == null || form.deliveryLongitude == null);
+
+                for (const item of missing) {
+                    const title = item.kind === "pickup" ? "lấy hàng" : "giao hàng";
+                    let position;
+                    try {
+                        position = await geocodeAddress(item.address);
+                    } catch (error) {
+                        const detail = error instanceof Error ? error.message : "Không tìm được tọa độ.";
+                        const message = `Không tự xác định được vị trí ${title}: ${detail} Bạn có thể nhấp trên bản đồ hoặc nhập tọa độ thủ công từ Google Maps.`;
+                        setQuoteError(message);
+                        throw new Error(message);
+                    }
+
+                    // Only apply the result to the unchanged address.
+                    setForm((current) => {
+                        const key = item.kind === "pickup" ? "pickupAddress" : "deliveryAddress";
+                        if (current[key].trim() !== item.address.trim()) return current;
+                        return item.kind === "pickup"
+                            ? { ...current, pickupLatitude: position.latitude, pickupLongitude: position.longitude }
+                            : { ...current, deliveryLatitude: position.latitude, deliveryLongitude: position.longitude };
+                    });
+                }
+
+                setQuoteInfo(
+                    "Đã tự tìm tọa độ từ địa chỉ. Vui lòng kiểm tra hai điểm ghim trên bản đồ; vị trí có thể chỉ gần đúng, đặc biệt với số nhà/hẻm. Sau khi kiểm tra, bấm Tính phí lần nữa."
+                );
+                setQuoteError(null);
+                setNotice({ kind: "success", text: "Đã định vị địa chỉ. Hãy kiểm tra lại điểm lấy và giao hàng trước khi báo giá." });
+            });
             return;
         }
         void run(async () => {
@@ -1157,9 +1199,9 @@ function Badge({ shipment }: {
                 {!quote && (quoteError || form.pickupLatitude == null ||
                   form.pickupLongitude == null || form.deliveryLatitude == null ||
                   form.deliveryLongitude == null) && (
-                    <div className="quote-inline-notice" role="status">
-                      {quoteError ||
-                        "Chưa đủ tọa độ để tính phí: hãy phóng to và nhấp vào cả bản đồ lấy hàng lẫn bản đồ giao hàng (hoặc dùng nút Tìm trên bản đồ)."}
+                    <div className={`quote-inline-notice${!quoteError ? " is-info" : ""}`} role="status">
+                      {quoteError || quoteInfo ||
+                        "Chưa có đủ tọa độ. Khi bấm Tính phí, hệ thống sẽ tự tìm vị trí từ hai địa chỉ đã nhập. Bạn cũng có thể đánh dấu thủ công trên bản đồ."}
                     </div>
                 )}
                 <div className="form-footer">
@@ -1173,8 +1215,8 @@ function Badge({ shipment }: {
                   </div>
 
                   <div className="actions">
-                    <button type="submit">
-                      {busy ? "Đang xử lý…" : "Tính phí"}
+                    <button type="submit" disabled={busy}>
+                      {busy ? "Đang tìm vị trí / tính phí…" : "Tính phí"}
                     </button>
 
                     {quote && (<button type="button" className="primary" onClick={() => void run(async () => {
