@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - integration/sprint3-pre-report
+      - feature/s3-service-dispatch
   pull_request:
     branches:
       - master
+      - integration/sprint3-pre-report
 
 permissions:
   contents: read
