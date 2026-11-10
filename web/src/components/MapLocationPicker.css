@@ -48,6 +48,13 @@
   font-size: 13px;
 }
 
+.map-picker__hint {
+  margin: 0;
+  color: #185c41;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .map-picker__map {
   height: 260px;
   width: 100%;
