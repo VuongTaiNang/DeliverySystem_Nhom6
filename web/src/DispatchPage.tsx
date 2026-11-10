@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { money, STATUS, EVENT_STATUS, MOCK_MODE } from "./api";
+import { money, STATUS, MOCK_MODE } from "./api";
+import { eventStatusLabel, assignmentStatusLabel, feePayerLabel, serviceLabel, vehicleLabel, assignerLabel } from "./lib/operationsStatusLabels";
 import type { Shipment, Status } from "./api";
 import { request } from "./lib/http";
 import "./DispatchPage.css";
@@ -1137,16 +1138,16 @@ const [cancelReason, setCancelReason] = useState("");
               <table>
                 <thead>
                   <tr>
-                    <th>Shipment ID</th>
-                    <th>Customer</th>
-                    <th>Pickup</th>
-                    <th>Delivery</th>
-                    <th>Staff</th>
+                    <th>Mã vận đơn</th>
+                    <th>Khách hàng</th>
+                    <th>Điểm lấy hàng</th>
+                    <th>Điểm giao hàng</th>
+                    <th>Nhân viên</th>
                     <th>COD</th>
-                    <th>Fee</th>
-                    <th>Status</th>
-                    <th>Created At</th>
-                    <th>Action</th>
+                    <th>Phí vận chuyển</th>
+                    <th>Trạng thái</th>
+                    <th>Ngày tạo</th>
+                    <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1318,15 +1319,15 @@ const [cancelReason, setCancelReason] = useState("");
               <table>
                 <thead>
                   <tr>
-                    <th>Shipment ID</th>
-                    <th>Customer</th>
-                    <th>Pickup</th>
-                    <th>Delivery</th>
+                    <th>Mã vận đơn</th>
+                    <th>Khách hàng</th>
+                    <th>Điểm lấy hàng</th>
+                    <th>Điểm giao hàng</th>
                     <th>Hàng hóa</th>
                     <th>COD</th>
-                    <th>Fee</th>
-                    <th>Created At</th>
-                    <th>Action</th>
+                    <th>Phí vận chuyển</th>
+                    <th>Ngày tạo</th>
+                    <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1362,7 +1363,7 @@ const [cancelReason, setCancelReason] = useState("");
                         </td>
                         <td>{money(item.codAmount)}</td>
                         <td>
-                          {money(item.fee)} <small className="muted">({item.feePayer})</small>
+                          {money(item.fee)} <small className="muted">({feePayerLabel(item.feePayer)})</small>
                         </td>
                         <td>{new Date(item.createdAt).toLocaleDateString("vi-VN")}</td>
                         <td>
@@ -1416,7 +1417,7 @@ const [cancelReason, setCancelReason] = useState("");
         <section className="panel ops-detail-container" aria-label="Chi tiết đơn hàng">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">OPERATIONS / SHIPMENT DETAIL</p>
+              <p className="eyebrow">VẬN HÀNH / CHI TIẾT VẬN ĐƠN</p>
               <h2>Vận đơn {selectedShipmentId}</h2>
             </div>
             <div style={{ display: "flex", gap: "10px" }}>
@@ -1447,7 +1448,7 @@ const [cancelReason, setCancelReason] = useState("");
               <div className="ops-detail-part">
                 <div className="ops-detail-part-header">
                   <h3>
-                    <span>📦</span> 1. Shipment Information (Thông tin đơn hàng)
+                    <span>📦</span> 1. Thông tin vận đơn
                   </h3>
                   <span className={`badge ${shipmentDetail.shipment.status}`}>
                     {STATUS[shipmentDetail.shipment.status as Status] || shipmentDetail.shipment.status}
@@ -1496,13 +1497,13 @@ const [cancelReason, setCancelReason] = useState("");
                   <div className="ops-info-card">
                     <dt>Cước phí & Người trả</dt>
                     <dd>
-                      {money(shipmentDetail.shipment.fee)} &bull; {shipmentDetail.shipment.feePayer}
+                      {money(shipmentDetail.shipment.fee)} &bull; {feePayerLabel(shipmentDetail.shipment.feePayer)}
                     </dd>
                   </div>
                   <div className="ops-info-card">
                     <dt>Dịch vụ & Phương tiện</dt>
                     <dd>
-                      {shipmentDetail.shipment.service} &bull; {shipmentDetail.shipment.vehicleType || "Xe máy"}
+                      {serviceLabel(shipmentDetail.shipment.service)} &bull; {vehicleLabel(shipmentDetail.shipment.vehicleType)}
                     </dd>
                   </div>
                   <div className="ops-info-card">
@@ -1522,7 +1523,7 @@ const [cancelReason, setCancelReason] = useState("");
               <div className="ops-detail-part">
                 <div className="ops-detail-part-header">
                   <h3>
-                    <span>⏱</span> 2. Events (Lịch sử hành trình & sự kiện)
+                    <span>⏱</span> 2. Lịch sử hành trình và sự kiện
                   </h3>
                   <span className="muted">{shipmentDetail.events.length} sự kiện</span>
                 </div>
@@ -1538,10 +1539,11 @@ const [cancelReason, setCancelReason] = useState("");
                         </div>
                         <div className="ops-timeline-content">
                           <span
+                            title={evt.status}
                             className={`badge ${evt.status}`}
                             style={{ marginRight: "10px", fontSize: "10px" }}
                           >
-                            {EVENT_STATUS[evt.status as keyof typeof EVENT_STATUS] || evt.status}
+                            {eventStatusLabel(evt.status)}
                           </span>
                           <span>{evt.note}</span>
                         </div>
@@ -1555,7 +1557,7 @@ const [cancelReason, setCancelReason] = useState("");
               <div className="ops-detail-part">
                 <div className="ops-detail-part-header">
                   <h3>
-                    <span>👤</span> 3. Assignment History (Lịch sử phân công nhân viên)
+                    <span>👤</span> 3. Lịch sử phân công nhân viên
                   </h3>
                   <div>
                     {/* Action buttons inside Assignment History section */}
@@ -1569,7 +1571,7 @@ const [cancelReason, setCancelReason] = useState("");
                           setReassignReason("");
                         }}
                       >
-                        Đổi nhân viên (Reassign)
+                        Đổi nhân viên phụ trách
                       </button>
                     ) : (
                       (shipmentDetail.shipment.status === "pending_pickup" ||
@@ -1613,12 +1615,12 @@ const [cancelReason, setCancelReason] = useState("");
                         <tr>
                           <th>ID</th>
                           <th>Nhân viên</th>
-                          <th>Người phân công</th>
+                          <th>Nguồn phân công</th>
                           <th>Thời gian phân công</th>
                           <th>Trạng thái</th>
                           <th>Hoạt động</th>
-                          <th>Nhận việc</th>
-                          <th>Kết thúc</th>
+                          <th>Thời gian nhận đơn</th>
+                          <th>Thời gian kết thúc</th>
                           <th>Lý do hủy / từ chối</th>
                           <th>Thao tác</th>
                         </tr>
@@ -1635,10 +1637,11 @@ const [cancelReason, setCancelReason] = useState("");
                                 </small>
                               )}
                             </td>
-                            <td>{item.assignedByName || "Hệ thống"}</td>
+                            <td>{assignerLabel(item.assignedByName)}</td>
                             <td>{new Date(item.assignedAt).toLocaleString("vi-VN")}</td>
                             <td>
                               <span
+                                title={item.status}
                                 className={`badge ${
                                   item.status === "completed"
                                     ? "delivered"
@@ -1649,7 +1652,7 @@ const [cancelReason, setCancelReason] = useState("");
                                     : "pending_pickup"
                                 }`}
                               >
-                                {item.status}
+                                {assignmentStatusLabel(item.status)}
                               </span>
                             </td>
                             <td>
