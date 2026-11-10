@@ -68,6 +68,24 @@ const PATH_MAP: Record<Page, string> = {
   "payment-result": "/payment/result",
 };
 
+// Client-side hint matching the server's explicit ward/commune address rule.
+// This checks declared text only; GIS boundary verification requires geographic data.
+function areaNameMatchesAddress(address: string, area: ServiceArea): boolean {
+  const fold = (value: string) => value.toLowerCase().replace(/đ/g, "d")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ").trim();
+
+  const fullName = fold(area.name);
+  const shortName = fullName.replace(/^(phuong|xa|dac khu)\s+/, "");
+  const labels = area.type === "commune"
+    ? [`xa ${shortName}`, `x. ${shortName}`, `x.${shortName}`]
+    : area.type === "special_zone"
+      ? [`dac khu ${shortName}`]
+      : [`phuong ${shortName}`, `p. ${shortName}`, `p.${shortName}`, `p ${shortName}`];
+
+  return fold(address).split(/[,;]/).some((part) => labels.includes(part.trim()));
+}
+
 function getPageFromLocation(): Page | null {
   if (typeof window === "undefined") return null;
   const path = window.location.pathname.toLowerCase();
@@ -596,6 +614,20 @@ function Badge({ shipment }: {
             setNotice({ kind: "error", text: "Vui lòng chọn phường/xã giao hàng để hệ thống tự phân công Staff." });
             return;
         }
+        if (form.pickupAreaId) {
+            const area = serviceAreas.find((item) => item.id === form.pickupAreaId);
+            if (area && !areaNameMatchesAddress(form.pickupAddress, area)) {
+                setNotice({ kind: "error", text: `Địa chỉ lấy hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                return;
+            }
+        }
+        if (form.deliveryAreaId) {
+            const area = serviceAreas.find((item) => item.id === form.deliveryAreaId);
+            if (area && !areaNameMatchesAddress(form.deliveryAddress, area)) {
+                setNotice({ kind: "error", text: `Địa chỉ giao hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                return;
+            }
+        }
         if (form.pickupLatitude == null || form.pickupLongitude == null ||
             form.deliveryLatitude == null || form.deliveryLongitude == null) {
             setNotice({ kind: "error", text: "Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá." });
@@ -976,7 +1008,7 @@ function Badge({ shipment }: {
                   <p className="muted full">
                     {areasError || (!user
                       ? "Đăng nhập để chọn phường/xã và kích hoạt tự động phân công Staff."
-                      : "Khu vực giao hàng quyết định Staff tự động được phân công; vị trí bản đồ dùng để xác định địa điểm.")}
+                      : "Ghi rõ phường/xã trong mỗi địa chỉ (ví dụ: 123 Đường ABC, Phường Hòa Hưng, TP.HCM) và chọn đúng khu vực tương ứng. Phường lấy hàng có thể khác phường giao hàng. Khu vực giao hàng quyết định Staff phụ trách.")}
                   </p>
 
                   <div className="full">
