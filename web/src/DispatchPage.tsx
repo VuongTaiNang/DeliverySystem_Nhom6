@@ -590,6 +590,55 @@ const [cancelReason, setCancelReason] = useState("");
     }
   }, [activeTab, loadOperationsShipments, loadNewShipments]);
 
+  // Automatic retry is the PRIMARY workflow for waiting/legacy shipments.
+  // Manual choice remains a separate Operations exception workflow.
+  async function handleRetryAutoAssignment(shipmentId: string) {
+    if (busyAction) return;
+    if (MOCK_MODE) {
+      setNotice({ kind: "error", text: "Tự phân công cần Backend thật. Hãy đặt VITE_USE_MOCK=false." });
+      return;
+    }
+
+    setBusyAction(true);
+    setNotice(null);
+
+    try {
+      const decision = await request<{
+        assigned: boolean;
+        message: string;
+        staffId?: number | null;
+      }>(`/operations/shipments/${encodeURIComponent(shipmentId)}/auto-assign`, {
+        method: "POST",
+      });
+
+      // Refresh before setting the final notice; the list loaders clear
+      // the page-level notice at the start of their requests.
+      await Promise.all([
+        loadAvailableStaff(),
+        activeTab === "all" ? loadOperationsShipments() : loadNewShipments(),
+        selectedShipmentId === shipmentId
+          ? loadShipmentDetail(shipmentId)
+          : Promise.resolve(),
+      ]);
+
+      setNotice({
+        kind: decision.assigned ? "success" : "error",
+        text: decision.assigned
+          ? `Tự động phân công đơn ${shipmentId} thành công. ${decision.message}`
+          : `Đơn ${shipmentId} chưa thể tự phân công: ${decision.message} Operations có thể xử lý ngoại lệ nếu cần.`,
+      });
+    } catch (error) {
+      setNotice({
+        kind: "error",
+        text: error instanceof Error
+          ? error.message
+          : "Không thể thử tự phân công. Vui lòng kiểm tra Backend.",
+      });
+    } finally {
+      setBusyAction(false);
+    }
+  }
+
   // -------------------------------------------------------------------
   // Action: Assign Staff (POST /api/v1/operations/shipments/{shipmentId}/assign)
   // -------------------------------------------------------------------
@@ -930,7 +979,7 @@ const [cancelReason, setCancelReason] = useState("");
           <div>
             <h2>Quản lý đơn hàng & Điều phối Operations</h2>
             <p className="muted">
-              Giám sát tiến độ đơn hàng, phân công nhân viên giao nhận và theo dõi lịch sử điều phối.
+              Hệ thống tự phân công theo dịch vụ và Staff khả dụng. Operations theo dõi kết quả và xử lý những đơn chưa được tự phân công.
             </p>
           </div>
           <button
@@ -976,7 +1025,7 @@ const [cancelReason, setCancelReason] = useState("");
               setActiveTab("new");
             }}
           >
-            Đơn mới chờ phân công (New)
+            Chờ hệ thống phân công
             {newShipments.length > 0 && (
               <span className="ops-badge-count">{newShipments.length}</span>
             )}
@@ -1166,18 +1215,32 @@ const [cancelReason, setCancelReason] = useState("");
                             Chi tiết
                           </button>
 
-                          {!item.activeAssignment && item.status === "pending_pickup" && (
-                            <button
-                              type="button"
-                              className="ops-btn-action ops-btn-assign"
-                              onClick={() => {
-                                setAssignModalShipmentId(item.id);
-                                setSelectedStaffId("");
-                                setAssignError("");
-                              }}
-                            >
-                              Phân công
-                            </button>
+                          {!item.activeAssignment && (item.status === "pending_pickup" || item.status === "pickup_failed") && (
+                            <>
+                              <button
+                                type="button"
+                                className="ops-btn-action ops-btn-assign"
+                                disabled={busyAction}
+                                onClick={() => void handleRetryAutoAssignment(item.id)}
+                              >
+                                Thử tự phân công
+                              </button>
+                              <details className="ops-dispatch-exception">
+                                <summary>Can thiệp thủ công</summary>
+                                <button
+                                  type="button"
+                                  className="ops-btn-action"
+                                  disabled={busyAction}
+                                  onClick={() => {
+                                    setAssignModalShipmentId(item.id);
+                                    setSelectedStaffId("");
+                                    setAssignError("");
+                                  }}
+                                >
+                                  Chọn Staff (ngoại lệ)
+                                </button>
+                              </details>
+                            </>
                           )}
 
                           {item.activeAssignment && (item.status === "pending_pickup" || item.status === "pickup_failed") && (
@@ -1306,14 +1369,26 @@ const [cancelReason, setCancelReason] = useState("");
                           <button
                             type="button"
                             className="ops-btn-action ops-btn-assign"
-                            onClick={() => {
-                              setAssignModalShipmentId(item.id);
-                              setSelectedStaffId("");
-                              setAssignError("");
-                            }}
+                            disabled={busyAction}
+                            onClick={() => void handleRetryAutoAssignment(item.id)}
                           >
-                            Phân công
+                            Thử tự phân công
                           </button>
+                          <details className="ops-dispatch-exception">
+                            <summary>Can thiệp thủ công</summary>
+                            <button
+                              type="button"
+                              className="ops-btn-action"
+                              disabled={busyAction}
+                              onClick={() => {
+                                setAssignModalShipmentId(item.id);
+                                setSelectedStaffId("");
+                                setAssignError("");
+                              }}
+                            >
+                              Chọn Staff (ngoại lệ)
+                            </button>
+                          </details>
                           <button
                             type="button"
                             className="ops-btn-action"
@@ -1499,17 +1574,31 @@ const [cancelReason, setCancelReason] = useState("");
                     ) : (
                       (shipmentDetail.shipment.status === "pending_pickup" ||
                         shipmentDetail.shipment.status === "pickup_failed") && (
-                        <button
-                          type="button"
-                          className="ops-btn-action ops-btn-assign"
-                          onClick={() => {
-                            setAssignModalShipmentId(shipmentDetail.shipment.id);
-                            setSelectedStaffId("");
-                            setAssignError("");
-                          }}
-                        >
-                          Phân công nhân viên
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="ops-btn-action ops-btn-assign"
+                            disabled={busyAction}
+                            onClick={() => void handleRetryAutoAssignment(shipmentDetail.shipment.id)}
+                          >
+                            Thử tự phân công
+                          </button>
+                          <details className="ops-dispatch-exception">
+                            <summary>Can thiệp thủ công</summary>
+                            <button
+                              type="button"
+                              className="ops-btn-action"
+                              disabled={busyAction}
+                              onClick={() => {
+                                setAssignModalShipmentId(shipmentDetail.shipment.id);
+                                setSelectedStaffId("");
+                                setAssignError("");
+                              }}
+                            >
+                              Chọn Staff (ngoại lệ)
+                            </button>
+                          </details>
+                        </>
                       )
                     )}
                   </div>
@@ -1629,7 +1718,7 @@ const [cancelReason, setCancelReason] = useState("");
         >
           <div className="ops-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ops-modal-header">
-              <h3>Phân công nhân viên giao nhận</h3>
+              <h3>Phân công thủ công (xử lý ngoại lệ)</h3>
               <button
                 type="button"
                 className="ops-modal-close"
@@ -1659,6 +1748,7 @@ const [cancelReason, setCancelReason] = useState("");
     </div>
   )}
 
+  <p className="muted">Chỉ dùng khi không thể tự phân công hoặc cần nhân viên Operations can thiệp vì lý do nghiệp vụ.</p>
   <label>
     <span>Chọn nhân viên thực hiện</span>
 
