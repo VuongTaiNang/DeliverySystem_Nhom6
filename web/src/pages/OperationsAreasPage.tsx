@@ -449,6 +449,19 @@ export default function OperationsAreasPage() {
     return { total, active, totalStaff, totalAssignments };
   }, [areas, staffList]);
 
+  const coverage = useMemo(() => {
+    const activeAreas = areas.filter((a) => a.isActive);
+    const counts = activeAreas.map((area) => ({
+      name: area.name,
+      count: area.staff?.filter((assigned) => assigned.isActive).length ?? 0,
+    }));
+    return {
+      noStaff: counts.filter((x) => x.count === 0),
+      singleStaff: counts.filter((x) => x.count === 1),
+      covered: counts.filter((x) => x.count >= 2),
+    };
+  }, [areas]);
+
   return (
     <div className="ops-areas-page">
       {notice && (
@@ -518,6 +531,28 @@ export default function OperationsAreasPage() {
           <strong style={{ color: "#123f31" }}>{stats.totalAssignments}</strong>
           <span>Lượt phân công phụ trách</span>
         </div>
+      </section>
+
+      <section className="ops-area-guidance" aria-label="Hướng dẫn phân vùng nhân viên">
+        <strong>Gợi ý điều phối theo khu vực (không phải giới hạn bắt buộc)</strong>
+        <p>
+          Với đơn Tiêu chuẩn và Giao nhanh, nên phân mỗi Staff phụ trách một nhóm
+          phường gần nhau, ưu tiên <strong>2–3 nhân viên cùng phụ trách một phường có nhiều đơn</strong>.
+          Một nhân viên có thể phụ trách nhiều phường; hệ thống xét cả tổng số đơn
+          đang nhận ở các phường trước khi phân thêm.
+        </p>
+        <p>
+          {coverage.noStaff.length > 0
+            ? `${coverage.noStaff.length} khu vực đang bật nhưng chưa có Staff hoạt động: ${coverage.noStaff.map((x) => x.name).join(", ")}.`
+            : "Không có khu vực đang bật bị thiếu Staff hoàn toàn."}
+          {" "}{coverage.singleStaff.length} khu vực hiện chỉ có 1 Staff,
+          {" "}{coverage.covered.length} khu vực có từ 2 Staff trở lên.
+        </p>
+        <small>
+          Gợi ý cụm phường để demo: Hòa Hưng – Diên Hồng – Vườn Lài;
+          Hòa Hưng – Tân Hòa – Nhiêu Lộc. Đây là gợi ý Operations tự thiết lập,
+          chưa có thuật toán tự xác minh ranh giới hay khoảng cách giữa phường.
+        </small>
       </section>
 
       {/* Sub-navigation Tabs: Chuyển đổi giữa Danh mục Khu vực & Phân khu vực cho Staff */}
@@ -798,7 +833,7 @@ export default function OperationsAreasPage() {
                     : "nhân viên"}
                 </h3>
                 <span style={{ fontSize: "12px", color: "#668177" }}>
-                  Một Staff có thể phụ trách nhiều khu vực; thuật toán Auto Assignment sẽ tự động điều phối đơn theo tỷ lệ sử dụng thấp nhất.
+                  Một Staff có thể phụ trách nhiều phường; hệ thống so sánh tải hiện tại trên toàn bộ phường, không cộng dồn sức chứa của từng phường thành hạn mức riêng.
                 </span>
               </div>
               <button
