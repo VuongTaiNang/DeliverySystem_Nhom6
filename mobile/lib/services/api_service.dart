@@ -406,6 +406,28 @@ class ApiService {
     throw Exception(data['message'] ?? 'Không gửi được báo cáo sự cố.');
   }
 
+  // Chỉ tìm vị trí khi người dùng hoàn tất nhập địa chỉ hoặc chủ động bấm tìm.
+  // Backend áp dụng giới hạn và bộ nhớ đệm cho các dịch vụ geocoding.
+  static Future<Map<String, dynamic>> geocodeAddress(String address) async {
+    final uri = Uri.parse('$baseUrl/api/v1/geocoding/search')
+        .replace(queryParameters: {'q': address.trim()});
+    final response = await http.get(uri, headers: _headers())
+        .timeout(const Duration(seconds: 18));
+    final data = _decodeResponse(response);
+    if (!_ok(response)) {
+      throw Exception(data['message'] ?? 'Không tìm được vị trí từ địa chỉ.');
+    }
+    final latitude = data['latitude'];
+    final longitude = data['longitude'];
+    if (latitude is! num || longitude is! num ||
+        !latitude.toDouble().isFinite || !longitude.toDouble().isFinite ||
+        latitude < -90 || latitude > 90 ||
+        longitude < -180 || longitude > 180) {
+      throw Exception('Dịch vụ tìm địa chỉ trả về tọa độ không hợp lệ.');
+    }
+    return data;
+  }
+
   // Lấy đánh giá hiện tại của đơn hàng
   static Future<Map<String, dynamic>?> getRating(
     String shipmentId,
