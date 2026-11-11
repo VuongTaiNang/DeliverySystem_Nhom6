@@ -144,11 +144,21 @@ public sealed class AutoAssignmentService : IAutoAssignmentService
                 }
             }
 
+            // Loại Staff đã từ chối chính Shipment này khỏi các lần phân công
+            // tự động tiếp theo, tránh phân công lặp lại cho cùng một người.
+            var rejectedStaffIds = await _db.DeliveryAssignments
+                .AsNoTracking()
+                .Where(x => x.ShipmentId == shipment.Id && x.Status == "rejected")
+                .Select(x => x.StaffId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
             var staffAreas = await _db.StaffAreas
                 .Include(x => x.Staff)
                 .Where(x =>
                     x.AreaId == areaId &&
                     x.IsActive &&
+                    !rejectedStaffIds.Contains(x.StaffId) &&
                     x.Staff.IsAvailable &&
                     x.Staff.Status != "inactive"
                 )
