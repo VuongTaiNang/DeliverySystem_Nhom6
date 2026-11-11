@@ -440,13 +440,14 @@ function Badge({ shipment }: {
     const [pickupLoading, setPickupLoading] =
       useState(user?.role === "customer");
       useEffect(() => {
-  if (!user || normalizedRole === "operations") {
-    if (!user) {
-      setShipments([]);
-    }
+  if (!user) {
+    setShipments([]);
     setLoading(false);
     return;
   }
+
+  // Operations cũng cần gọi GET /api/v1/shipments để hiển thị toàn bộ đơn;
+  // endpoint Backend đã phân quyền và trả đầy đủ đơn cho Operations.
 
   let active = true;
 
