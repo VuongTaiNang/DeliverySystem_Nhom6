@@ -57,6 +57,9 @@ class _CreateOrderPageState
   Map<String, dynamic>? _quote;
   LatLng? _pickupLocation;
   LatLng? _deliveryLocation;
+  String? _geocodingField;
+  String? _pickupGeocodeStatus;
+  String? _deliveryGeocodeStatus;
 
   // =========================================================
   // COLORS
@@ -214,6 +217,95 @@ class _CreateOrderPageState
     }
 
     super.dispose();
+  }
+
+
+  // Địa chỉ được tìm một lần khi nhập xong hoặc khi bấm nút định vị,
+  // không autocomplete qua từng ký tự.
+  Future<void> _geocodeAddress(bool pickup) async {
+    if (_loading || _geocodingField != null) return;
+    final controller = pickup ? _pickup : _delivery;
+    final address = controller.text.trim();
+    if (address.length < 6) {
+      _show('Vui lòng nhập địa chỉ chi tiết hơn để định vị.', true);
+      return;
+    }
+    final hasCity = RegExp(
+      r'(TP\.?\s*HCM|Hồ Chí Minh|Ho Chi Minh)',
+      caseSensitive: false,
+    ).hasMatch(address);
+    final query = hasCity ? address : '$address, Thành phố Hồ Chí Minh, Việt Nam';
+    setState(() {
+      _geocodingField = pickup ? 'pickup' : 'delivery';
+      if (pickup) {
+        _pickupGeocodeStatus = null;
+      } else {
+        _deliveryGeocodeStatus = null;
+      }
+    });
+    try {
+      final result = await ApiService.geocodeAddress(query);
+      if (!mounted || controller.text.trim() != address) return;
+      final point = LatLng(
+        (result['latitude'] as num).toDouble(),
+        (result['longitude'] as num).toDouble(),
+      );
+      _invalidateQuote();
+      setState(() {
+        if (pickup) {
+          _pickupLocation = point;
+          _pickupGeocodeStatus =
+              'Đã định vị gần đúng. Kiểm tra và chỉnh ghim nếu cần.';
+        } else {
+          _deliveryLocation = point;
+          _deliveryGeocodeStatus =
+              'Đã định vị gần đúng. Kiểm tra và chỉnh ghim nếu cần.';
+        }
+      });
+    } catch (error) {
+      if (!mounted || controller.text.trim() != address) return;
+      final message = error.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        if (pickup) {
+          _pickupGeocodeStatus = 'Không tìm tự động được: $message';
+        } else {
+          _deliveryGeocodeStatus = 'Không tìm tự động được: $message';
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _geocodingField = null);
+    }
+  }
+
+  Widget _geocodeControl(bool pickup) {
+    final code = pickup ? 'pickup' : 'delivery';
+    final status = pickup ? _pickupGeocodeStatus : _deliveryGeocodeStatus;
+    final searching = _geocodingField == code;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextButton.icon(
+            onPressed: (_loading || _geocodingField != null)
+                ? null
+                : () { _geocodeAddress(pickup); },
+            icon: searching
+                ? const SizedBox(
+                    height: 16, width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.manage_search),
+            label: Text(searching
+                ? 'Đang tìm trên bản đồ…'
+                : 'Tự xác định vị trí từ địa chỉ'),
+          ),
+          if (status != null)
+            Text(status, style: const TextStyle(
+                fontSize: 12, color: Color(0xFF668177))),
+        ],
+      ),
+    );
   }
 
   // =========================================================
@@ -433,6 +525,7 @@ class _CreateOrderPageState
     int maxLines = 1,
     String? hint,
     IconData? icon,
+    VoidCallback? onEditingComplete,
   }) {
     return Padding(
       padding:
@@ -443,6 +536,7 @@ class _CreateOrderPageState
         inputFormatters: formatters,
         maxLength: maxLength,
         maxLines: maxLines,
+        onEditingComplete: onEditingComplete,
 
         validator: validator ??
             (value) => _required(
@@ -454,9 +548,9 @@ class _CreateOrderPageState
         onChanged: (_) {
           // Đổi địa chỉ phải chọn lại điểm trên bản đồ, và báo giá cũ hết hiệu lực.
           if (identical(controller, _pickup)) {
-            setState(() => _pickupLocation = null);
+            setState(() { _pickupLocation = null; _pickupGeocodeStatus = null; });
           } else if (identical(controller, _delivery)) {
-            setState(() => _deliveryLocation = null);
+            setState(() { _deliveryLocation = null; _deliveryGeocodeStatus = null; });
           }
           _invalidateQuote();
         },
@@ -548,7 +642,9 @@ class _CreateOrderPageState
                       Icons.location_on_outlined,
                   hint:
                       'Nhập địa chỉ lấy hàng',
+                  onEditingComplete: () { _geocodeAddress(true); },
                 ),
+                _geocodeControl(true),
                  const SizedBox(height: 12),
                  DropdownButtonFormField<int>(
                    key: ValueKey('pickup-area-$_pickupAreaId'),
@@ -597,7 +693,7 @@ class _CreateOrderPageState
               value: _pickupLocation,
               onChanged: (location) {
                 _invalidateQuote();
-                setState(() => _pickupLocation = location);
+                setState(() { _pickupLocation = location; _pickupGeocodeStatus = 'Đã chọn vị trí thủ công trên bản đồ.'; });
               },
             ),
             const SizedBox(height: 20),
@@ -645,7 +741,9 @@ class _CreateOrderPageState
                       Icons.flag_outlined,
                   hint:
                       'Nhập địa chỉ giao hàng',
+                  onEditingComplete: () { _geocodeAddress(false); },
                 ),
+                _geocodeControl(false),
                  const SizedBox(height: 12),
                  DropdownButtonFormField<int>(
                    key: ValueKey('delivery-area-$_deliveryAreaId'),
@@ -692,7 +790,7 @@ class _CreateOrderPageState
               markerColor: Colors.green,
               onChanged: (location) {
                 _invalidateQuote();
-                setState(() => _deliveryLocation = location);
+                setState(() { _deliveryLocation = location; _deliveryGeocodeStatus = 'Đã chọn vị trí thủ công trên bản đồ.'; });
               },
             ),
             const SizedBox(height: 20),
