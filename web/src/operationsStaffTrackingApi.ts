@@ -10,3 +10,15 @@ export type StaffTrackingItem = {
 };
 
 export const listStaffTracking = () => request<StaffTrackingItem[]>("/operations/staff-tracking");
+
+export type CompletedStaffDelivery = {
+  assignmentId: number;
+  staffId: number;
+  employeeCode: string;
+  staffName: string;
+  shipmentId: string;
+  completedAt: string;
+};
+
+export const listRecentCompletedStaffDeliveries = () =>
+  request<CompletedStaffDelivery[]>("/operations/staff-tracking/recent-completed");

@@ -19,6 +19,7 @@ class _ComplaintPageState extends State<ComplaintPage> {
   String _type = 'damaged';
   bool _loading = true;
   bool _saving = false;
+  int _loadVersion = 0;
   String? _error;
   List<Map<String, dynamic>> _complaints = [];
 
@@ -49,6 +50,7 @@ class _ComplaintPageState extends State<ComplaintPage> {
   }
 
   Future<void> _loadComplaints() async {
+    final version = ++_loadVersion;
     setState(() {
       _loading = true;
       _error = null;
@@ -56,15 +58,17 @@ class _ComplaintPageState extends State<ComplaintPage> {
 
     try {
       final data = await ApiService.listComplaints(widget.shipmentId);
-      if (!mounted) return;
+      if (!mounted || version != _loadVersion) return;
       setState(() => _complaints = data);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || version != _loadVersion) return;
       setState(() {
         _error = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && version == _loadVersion) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -209,7 +213,7 @@ class _ComplaintPageState extends State<ComplaintPage> {
                   ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _loading ? null : _loadComplaints,
+                  onPressed: _loadComplaints,
                   icon: const Icon(Icons.refresh),
                   label: const Text('Làm mới trạng thái'),
                 ),

@@ -298,3 +298,22 @@
   font-style: italic;
 }
 
+
+/* Automatic dispatch is the primary action. Manual Staff selection is an
+   explicit Operations exception, not a routine step in the shipment flow. */
+.ops-dispatch-exception {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 4px 0 4px 8px;
+  font-size: 12px;
+  color: #61786d;
+}
+.ops-dispatch-exception summary {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ops-dispatch-exception[open] > button {
+  display: block;
+  margin-top: 8px;
+}

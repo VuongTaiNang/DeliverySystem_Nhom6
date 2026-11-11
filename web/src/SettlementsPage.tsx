@@ -16,6 +16,9 @@ export default function SettlementsPage() {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    // Never silently settle every eligible shipment. Operations must explicitly
+    // choose the same Shop's shipments for each settlement batch.
+    const [chosenShipmentIds, setChosenShipmentIds] = useState<string[]>([]);
     useEffect(() => {
         let active = true;
         setLoading(true);
@@ -41,26 +44,32 @@ export default function SettlementsPage() {
         };
     }, [reload]);
     // Điều kiện hợp lệ của đơn hàng để đối soát: status = delivered và CodCollected > 0
-    const eligible = (data?.eligibleShipments ?? []).filter((s) => s.status === "delivered" && (s.codCollected ?? 0) > 0);
+    type EligibleShipmentWithOwner = SettlementData["eligibleShipments"][number] & { customerId?: number | null };
+    const eligible = ((data?.eligibleShipments ?? []) as EligibleShipmentWithOwner[])
+        .filter((s) => s.status === "delivered" && (s.codCollected ?? 0) > 0);
+    const chosen = eligible.filter((shipment) => chosenShipmentIds.includes(shipment.id));
+    const owners = new Set(chosen.map((shipment) => shipment.customerId));
+    const invalidOwnerSelection = chosen.length > 1 &&
+        (owners.size !== 1 || chosen.some((shipment) => shipment.customerId == null));
     const settlements = data?.settlements ?? [];
     const selected = settlements.find((item) => item.id === selectedId);
-    const totalCod = eligible.reduce((sum, shipment) => sum + shipment.codCollected, 0);
+    const totalCod = chosen.reduce((sum, shipment) => sum + shipment.codCollected, 0);
     // Áp dụng quy tắc tính phí tự động:
     // - Loại shop_prepaid: không trừ Shipping Fee khỏi COD (0)
     // - Loại deduct_cod: trừ trực tiếp Shipping Fee khỏi COD Settlement (shipment.fee)
     // - Loại recipient: người nhận trả Shipping Fee (0)
-    const deduction = eligible.reduce((sum, shipment) => sum + (shipment.feePayer === "deduct_cod" ? shipment.fee : 0), 0);
+    const deduction = chosen.reduce((sum, shipment) => sum + (shipment.feePayer === "deduct_cod" ? shipment.fee : 0), 0);
     const previewNet = totalCod - deduction + adjustment;
     async function createBatch(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (busy || eligible.length === 0)
+        if (busy || chosen.length === 0 || invalidOwnerSelection)
             return;
         setBusy(true);
         setError("");
         setSuccess("");
         try {
             const settlement = await api.createSettlement({
-                shipmentIds: eligible.map((shipment) => shipment.id),
+                shipmentIds: chosen.map((shipment) => shipment.id),
                 adjustment,
                 adjustmentReason: reason,
             });
@@ -73,6 +82,7 @@ export default function SettlementsPage() {
                 : current);
             setAdjustment(0);
             setReason("");
+            setChosenShipmentIds((previous) => previous.filter((id) => !included.has(id)));
             setSelectedId(settlement.id);
             setSuccess("Đã lập kỳ đối soát. Chưa ghi nhận thanh toán.");
         }
@@ -120,19 +130,42 @@ export default function SettlementsPage() {
           <strong>{eligible.length}</strong> đơn COD đã giao thành công,
           chưa thuộc kỳ đối soát.
         </p>
+        {canManage && eligible.length > 0 && (
+          <p className="muted">
+            <strong>Chọn từng vận đơn</strong> cần lập kỳ. Một kỳ chỉ chứa các đơn của cùng một Shop;
+            không bắt buộc gộp tất cả các đơn đang chờ.
+          </p>
+        )}
 
         {eligible.length > 0 && (<div className="table-scroll">
             <table>
               <thead>
                 <tr>
+                  {canManage && <th>Chọn</th>}
                   <th>Vận đơn</th>
+                  {canManage && <th>Mã Shop</th>}
                   <th>COD đã thu</th>
                   <th>Phí khấu trừ COD</th>
                 </tr>
               </thead>
               <tbody>
                 {eligible.map((shipment) => (<tr key={shipment.id}>
+                    {canManage && (
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Chọn vận đơn ${shipment.id} để lập kỳ đối soát`}
+                          checked={chosenShipmentIds.includes(shipment.id)}
+                          onChange={(event) => {
+                            setChosenShipmentIds((current) => event.target.checked
+                              ? [...current, shipment.id]
+                              : current.filter((id) => id !== shipment.id));
+                          }}
+                        />
+                      </td>
+                    )}
                     <td className="tracking-code">{shipment.id}</td>
+                    {canManage && <td>{shipment.customerId ?? "—"}</td>}
                     <td>{money(shipment.codCollected)}</td>
                     <td>
                       {money(shipment.feePayer === "deduct_cod"
@@ -146,7 +179,15 @@ export default function SettlementsPage() {
 
         {canManage && eligible.length > 0 && (<form onSubmit={createBatch} className="settlement-form">
             <fieldset disabled={busy}>
-              <div className="form-grid">
+              {invalidOwnerSelection && (
+                <p className="notice error" role="alert">
+                  Không thể gộp nhiều Shop trong một kỳ. Hãy chỉ chọn các đơn có cùng Mã Shop.
+                </p>
+              )}
+              <p className="muted">Đã chọn: <strong>{chosen.length} đơn</strong> · COD {money(totalCod)} ·
+                Khấu trừ {money(deduction)}.
+              </p>
+              <div className="form-grid settlement-adjustment-fields">
                 <label>
                   Điều chỉnh (đ)
                   <input type="number" step="1" required value={Number.isFinite(adjustment) ? adjustment : ""} onChange={(event) => setAdjustment(event.target.valueAsNumber)}/>
@@ -164,12 +205,12 @@ export default function SettlementsPage() {
               <div className="settlement-total">
                 <span>Số tiền dự kiến trả shop</span>
                 <strong>
-                  {Number.isFinite(previewNet) ? money(previewNet) : "—"}
+                  {chosen.length > 0 && Number.isFinite(previewNet) ? money(previewNet) : "—"}
                 </strong>
               </div>
 
-              <button type="submit" className="primary" disabled={Boolean(selected)}>
-                {busy ? "Đang lập kỳ…" : "Lập kỳ cho các đơn bên trên"}
+              <button type="submit" className="primary" disabled={Boolean(selected) || chosen.length === 0 || invalidOwnerSelection || !Number.isFinite(previewNet)}>
+                {busy ? "Đang lập kỳ…" : `Lập kỳ cho ${chosen.length} đơn đã chọn`}
               </button>
             </fieldset>
           </form>)}

@@ -9,7 +9,8 @@ export interface OperationsStaff {
   fullName: string;
   email: string;
   phone: string;
-  area: string;
+  area: string; // legacy free-text note; not used for automatic dispatch
+  assignedAreas?: string[]; // active, canonical StaffAreas from Operations
   status: StaffStatus;
   isAvailable: boolean;
   role: string;

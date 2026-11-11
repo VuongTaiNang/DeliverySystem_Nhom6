@@ -14,6 +14,13 @@ namespace Back_DeliverySystem.Controllers;
 public class ComplaintsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private static readonly HashSet<string> StaffIncidentCategories =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "recipient_issue", "address_issue", "goods_issue",
+            "transport_issue", "safety_incident", "other"
+        };
+
     public ComplaintsController(AppDbContext db) => _db = db;
 
     private int? CurrentUserId() =>
@@ -77,8 +84,11 @@ public class ComplaintsController : ControllerBase
         if (c == null) return NotFound(new { message = "Không tìm thấy khiếu nại." });
 
         var category = request.Category.Trim().ToLowerInvariant();
-        if (!ComplaintRules.Categories.Contains(category))
-            return BadRequest(new { message = "Phân loại không hợp lệ." });
+        var validCategory = c.Source == "staff"
+            ? StaffIncidentCategories.Contains(category)
+            : ComplaintRules.Categories.Contains(category);
+        if (!validCategory)
+            return BadRequest(new { message = "Phân loại không hợp lệ với nguồn báo cáo." });
         if (c.Status == "resolved")
             return Conflict(new { message = "Khiếu nại đã giải quyết, không thể đổi phân loại." });
 

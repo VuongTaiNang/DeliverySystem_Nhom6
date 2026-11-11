@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 /** Shared Operations shell. Business screens are owned by the respective feature teams. */
-export type OperationsSection = "dashboard" | "orders" | "routes" | "areas" | "staff" | "tracking" | "incidents" | "settlements";
+export type OperationsSection = "dashboard" | "orders" | "routes" | "areas" | "staff" | "tracking" | "incidents" | "ratings" | "settlements" | "cash-payments";
 
 export const operationsItems: { key: OperationsSection; title: string; icon: string }[] = [
   { key: "dashboard", title: "Tổng hợp số liệu ", icon: "▤" },
@@ -11,7 +11,9 @@ export const operationsItems: { key: OperationsSection; title: string; icon: str
   { key: "staff", title: "Nhân viên", icon: "👤" },
   { key: "tracking", title: "Vị trí và ETA", icon: "⌖" },
   { key: "incidents", title: "Khiếu nại", icon: "!" },
+  { key: "ratings", title: "Đánh giá dịch vụ", icon: "★" },
   { key: "settlements", title: "Đối soát COD", icon: "₫" },
+  { key: "cash-payments", title: "Thu phí trả trước", icon: "▣" },
 ];
 
 function resolveCurrentSection(fallback: OperationsSection): OperationsSection {
@@ -21,9 +23,11 @@ function resolveCurrentSection(fallback: OperationsSection): OperationsSection {
   if (path === "/operations/staff-management") return "staff";
   if (path === "/operations/staff-tracking") return "tracking";
   if (path === "/incidents") return "incidents";
+  if (path === "/operations/ratings") return "ratings";
   if (path === "/operations/routes") return "routes";
   if (path === "/operations/areas") return "areas";
   if (path === "/settlements") return "settlements";
+  if (path === "/operations/prepaid-fees") return "cash-payments";
   
   return fallback;
 }
@@ -43,6 +47,7 @@ export function OperationsSidebar({
       return;
     }
     if (item === "tracking") { window.location.assign("/operations/staff-tracking"); return; }
+    if (item === "ratings") { window.location.assign("/operations/ratings"); return; }
     if (item === "incidents") {
       window.location.assign("/incidents");
       return;

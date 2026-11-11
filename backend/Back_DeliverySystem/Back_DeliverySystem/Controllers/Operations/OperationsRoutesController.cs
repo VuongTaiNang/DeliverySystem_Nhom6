@@ -1068,6 +1068,63 @@ namespace Back_DeliverySystem.Controllers.Operations
             // Giữ giống rule assign hiện tại của hệ thống:
             // pending_pickup / pickup_failed
             // =====================================================
+            // A multi-order route serves standard/fast parcels; express must
+            // be direct. One express parcel may have pickup + delivery stops.
+            if (shipments.Any(x => x.Service == "express") && shipmentIds.Count > 1)
+            {
+                return BadRequest(new
+                {
+                    message = "Hỏa tốc phải giao trực tiếp. Không được gom nhiều đơn vào cùng tuyến có đơn hỏa tốc."
+                });
+            }
+
+            // Route activation must not bypass the existing payment requirement.
+            var prepaidIds = shipments
+                .Where(x => x.FeePayer == "shop_prepaid")
+                .Select(x => x.Id)
+                .ToList();
+
+            if (prepaidIds.Count > 0)
+            {
+                var paidShipmentIds = await _context.Payments.AsNoTracking()
+                    .Where(x => prepaidIds.Contains(x.ShipmentId) && x.Status == "paid")
+                    .Select(x => x.ShipmentId)
+                    .Distinct()
+                    .ToListAsync();
+
+                var unpaid = prepaidIds.Except(paidShipmentIds).ToList();
+                if (unpaid.Count > 0)
+                {
+                    return Conflict(new
+                    {
+                        message = "Đơn shop_prepaid cần thanh toán trước khi đưa vào tuyến.",
+                        shipmentIds = unpaid
+                    });
+                }
+            }
+
+            // A regular delivery route follows StaffAreas defined by Operations.
+            // Preserve older orders without DeliveryAreaId for compatibility.
+            var coveredAreaIds = await _context.StaffAreas.AsNoTracking()
+                .Where(x => x.StaffId == route.StaffId && x.IsActive && x.Area.IsActive)
+                .Select(x => x.AreaId)
+                .ToListAsync();
+
+            var outsideCoverage = shipments
+                .Where(x => x.Service != "express" &&
+                            x.DeliveryAreaId.HasValue &&
+                            !coveredAreaIds.Contains(x.DeliveryAreaId.Value))
+                .Select(x => x.Id)
+                .ToList();
+            if (outsideCoverage.Count > 0)
+            {
+                return BadRequest(new
+                {
+                    message = "Tuyến tiêu chuẩn/nhanh chứa đơn ngoài khu vực Staff phụ trách.",
+                    shipmentIds = outsideCoverage
+                });
+            }
+
             var invalidShipments =
                 shipments
                     .Where(x =>

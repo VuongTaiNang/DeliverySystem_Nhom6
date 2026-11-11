@@ -1,6 +1,7 @@
 ﻿using Back_DeliverySystem.Data;
 using Back_DeliverySystem.DTOs;
 using Back_DeliverySystem.Models;
+using Back_DeliverySystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,10 +19,12 @@ namespace Back_DeliverySystem.Controllers
     public class OperationsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IAutoAssignmentService _autoAssignment;
 
-        public OperationsController(AppDbContext context)
+        public OperationsController(AppDbContext context, IAutoAssignmentService autoAssignment)
         {
             _context = context;
+            _autoAssignment = autoAssignment;
         }
 
         // =========================================================
@@ -225,7 +228,33 @@ namespace Back_DeliverySystem.Controllers
                 )
                 .ToListAsync();
 
-            return Ok(staffs);
+            // Display authoritative active StaffArea assignments, rather
+            // than legacy Staff.Area text (which can be stale, e.g. "Quận 7").
+            var activeStaffAreas = await _context.StaffAreas.AsNoTracking()
+                .Where(x => x.IsActive && x.Area.IsActive)
+                .Select(x => new { x.StaffId, AreaName = x.Area.Name })
+                .ToListAsync();
+            var areaNamesByStaff = activeStaffAreas
+                .GroupBy(x => x.StaffId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(x => x.AreaName).Distinct().ToArray());
+
+            return Ok(staffs.Select(staff => new
+            {
+                staff.id,
+                staff.employeeCode,
+                staff.userId,
+                staff.fullName,
+                staff.email,
+                staff.phone,
+                staff.area, // Legacy editable description; not a dispatch rule.
+                assignedAreas = areaNamesByStaff.GetValueOrDefault(staff.id) ?? Array.Empty<string>(),
+                staff.status,
+                staff.isAvailable,
+                staff.role,
+                staff.createdAt
+            }));
         }
 
         // =========================================================
@@ -1838,6 +1867,36 @@ namespace Back_DeliverySystem.Controllers
             return Ok(staffs);
         }
 
+
+        // =========================================================
+        // RETRY AUTO-ASSIGNMENT — Operations reviews a waiting shipment
+        // POST: /api/v1/operations/shipments/{shipmentId}/auto-assign
+        // This reuses the SAME transactional policy as Customer-created orders.
+        // No Staff ID is passed, and success is never manufactured by the UI.
+        // =========================================================
+        [HttpPost("shipments/{shipmentId}/auto-assign")]
+        public async Task<IActionResult> RetryAutoAssignment(
+            string shipmentId, CancellationToken cancellationToken)
+        {
+            var exists = await _context.Shipments
+                .AsNoTracking()
+                .AnyAsync(x => x.Id == shipmentId, cancellationToken);
+            if (!exists)
+                return NotFound(new { message = "Không tìm thấy đơn hàng." });
+
+            var decision = await _autoAssignment.TryAssignAsync(
+                shipmentId, cancellationToken);
+
+            return Ok(new
+            {
+                assigned = decision.Assigned,
+                message = decision.Reason,
+                staffId = decision.StaffId,
+                areaId = decision.AreaId,
+                activeOrders = decision.ActiveOrders,
+                capacity = decision.Capacity
+            });
+        }
 
         // =========================================================
         // PHÂN CÔNG ĐƠN CHO STAFF

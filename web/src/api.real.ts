@@ -18,10 +18,25 @@ export const STATUS = {
 
 export type Status = keyof typeof STATUS;
 
-export const EVENT_STATUS: Record<Status | "arrived_at_pickup" | "arrived_at_delivery", string> = {
+// Human-readable labels for both Customer tracking and Operations history.
+// Status/event codes in the API and database are not translated.
+export const EVENT_STATUS: Record<string, string> = {
   ...STATUS,
   arrived_at_pickup: "Nhân viên đã đến điểm lấy hàng",
   arrived_at_delivery: "Nhân viên đã đến điểm giao hàng",
+  assigned_staff: "Đã phân công nhân viên",
+  assignment_accepted: "Nhân viên đã nhận đơn",
+  assignment_rejected: "Nhân viên từ chối đơn",
+  assignment_cancelled: "Đã hủy phân công",
+  staff_reassigned: "Đã chuyển nhân viên phụ trách",
+  waiting_assignment: "Đang chờ phân công",
+  waiting_payment: "Đang chờ thanh toán",
+  assignment_started: "Đã bắt đầu nhiệm vụ",
+  return_complete: "Đã hoàn tất hoàn hàng",
+  order_created: "Đã tạo vận đơn",
+  shipment_created: "Đã tạo vận đơn",
+  pickup_success: "Lấy hàng thành công",
+  delivery_success: "Giao hàng thành công",
 };
 
 export type FeePayer = "shop_prepaid" | "recipient" | "deduct_cod";
@@ -190,7 +205,19 @@ export const COMPLAINT_CATEGORIES = {
   other: "Khác",
 } as const;
 
-export type ComplaintCategory = keyof typeof COMPLAINT_CATEGORIES;
+// Phân loại xử lý nội bộ cho sự cố Staff (#22), tách khỏi khiếu nại Customer.
+export const STAFF_INCIDENT_CATEGORIES = {
+  recipient_issue: "Người nhận không hợp tác / không liên lạc",
+  address_issue: "Sai địa chỉ hoặc vị trí giao nhận",
+  goods_issue: "Vấn đề hàng hóa",
+  transport_issue: "Phương tiện hoặc hành trình",
+  safety_incident: "Tai nạn / an toàn giao nhận",
+  other: "Sự cố khác",
+} as const;
+
+export type ComplaintCategory =
+  | keyof typeof COMPLAINT_CATEGORIES
+  | keyof typeof STAFF_INCIDENT_CATEGORIES;
 
 // Loại sự cố do Staff báo cáo khi giao hàng
 export const STAFF_INCIDENT_TYPES = {
@@ -566,7 +593,8 @@ async classifyComplaint(
   incidentId: number,
   category: ComplaintCategory
 ): Promise<void> {
-  if (!Object.prototype.hasOwnProperty.call(COMPLAINT_CATEGORIES, category)) {
+  if (!Object.prototype.hasOwnProperty.call(COMPLAINT_CATEGORIES, category) &&
+        !Object.prototype.hasOwnProperty.call(STAFF_INCIDENT_CATEGORIES, category)) {
     throw new Error("Phân loại không hợp lệ.");
   }
   await request<unknown>(`/complaints/${incidentId}/classify`, {
@@ -655,17 +683,27 @@ async assignShipment(shipmentId: string, input: AssignmentInput): Promise<Shipme
 async getSettlementData(): Promise<SettlementData> {
     return request<SettlementData>("/settlements");
 },
+// POST responses are wrapped by the Backend as { message, settlement }.
+// GET /settlements returns the bare settlement objects in its list.
 async createSettlement(input: CreateSettlementInput): Promise<Settlement> {
-    return request<Settlement>("/settlements", {
+    const response = await request<{ message: string; settlement: Settlement }>("/settlements", {
         method: "POST",
         body: JSON.stringify(input),
     });
+    if (!response?.settlement || !Array.isArray(response.settlement.lines)) {
+        throw new Error("Kỳ đối soát có thể đã được lưu. Hãy tải lại Lịch sử đối soát trước khi thử lại.");
+    }
+    return response.settlement;
 },
 async completeSettlement(settlementId: string, paymentReference: string): Promise<Settlement> {
-    return request<Settlement>(`/settlements/${encodeURIComponent(settlementId)}/complete`, {
+    const response = await request<{ message: string; settlement: Settlement }>(`/settlements/${encodeURIComponent(settlementId)}/complete`, {
         method: "POST",
         body: JSON.stringify({ paymentReference }),
     });
+    if (!response?.settlement || !Array.isArray(response.settlement.lines)) {
+        throw new Error("Kỳ đối soát có thể đã được hoàn tất. Hãy tải lại Lịch sử đối soát trước khi thử lại.");
+    }
+    return response.settlement;
 },
 
 async getAccount(): Promise<AccountInfo> {

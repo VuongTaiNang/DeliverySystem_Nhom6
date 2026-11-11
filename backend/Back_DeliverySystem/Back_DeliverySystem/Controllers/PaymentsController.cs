@@ -16,15 +16,21 @@ namespace Back_DeliverySystem.Controllers
         private readonly AppDbContext _context;
         private readonly IVnPayService _vnPayService;
         private readonly IConfiguration _configuration;
+        private readonly IAutoAssignmentService _autoAssignment;
+        private readonly ILogger<PaymentsController> _logger;
 
         public PaymentsController(
             AppDbContext context,
             IVnPayService vnPayService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IAutoAssignmentService autoAssignment,
+            ILogger<PaymentsController> logger)
         {
             _context = context;
             _vnPayService = vnPayService;
             _configuration = configuration;
+            _autoAssignment = autoAssignment;
+            _logger = logger;
         }
 
 
@@ -109,6 +115,18 @@ namespace Back_DeliverySystem.Controllers
                 });
             }
 
+
+            // A pending cash request must be completed/cancelled before a
+            // different payment path is started. Never allow two methods to
+            // collect the same shipping fee.
+            var cashPending = await _context.Payments.AnyAsync(x =>
+                x.ShipmentId == shipment.Id && x.Status == "pending" &&
+                x.Method == "cash");
+            if (cashPending)
+                return Conflict(new
+                {
+                    message = "Đơn đang chờ Operations xác nhận thu tiền mặt. Không thể tạo thêm VNPay."
+                });
 
             // Mã giao dịch gửi sang VNPay
             // vnp_TxnRef yêu cầu duy nhất
@@ -346,6 +364,9 @@ namespace Back_DeliverySystem.Controllers
                 });
             }
 
+            if (payment.Method != "vnpay")
+                return BadRequest(new { success = false, message = "Giao dịch không thuộc VNPay." });
+
             // 3. Kiểm tra số tiền
             if (!long.TryParse(
                     query["vnp_Amount"],
@@ -419,6 +440,8 @@ namespace Back_DeliverySystem.Controllers
                 }
 
                 await _context.SaveChangesAsync();
+                if (success)
+                    await TryDispatchAfterPaidAsync(payment.ShipmentId);
             }
 
             // URL được cấu hình cố định ở server, không nhận URL redirect từ query.
@@ -491,6 +514,9 @@ namespace Back_DeliverySystem.Controllers
                             "Order not found"
                     });
                 }
+                if (payment.Method != "vnpay")
+                    return Ok(new { RspCode = "04", Message = "Invalid Payment Method" });
+
 
 
                 // 3. Kiểm tra amount
@@ -574,9 +600,9 @@ namespace Back_DeliverySystem.Controllers
                 }
 
 
-                await _context
-                    .SaveChangesAsync();
-
+                await _context.SaveChangesAsync();
+                if (payment.Status == "paid")
+                    await TryDispatchAfterPaidAsync(payment.ShipmentId);
 
                 // VNPay yêu cầu JSON RspCode + Message
                 return Ok(new
@@ -596,6 +622,20 @@ namespace Back_DeliverySystem.Controllers
                 });
             }
         }
-        
+
+        // Never fail a verified payment just because there is no free Staff.
+        // Retry can be triggered from Operations after staffing changes.
+        private async Task TryDispatchAfterPaidAsync(string shipmentId)
+        {
+            try
+            {
+                await _autoAssignment.TryAssignAsync(shipmentId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "VNPay confirmed but dispatch failed for shipment {ShipmentId}", shipmentId);
+            }
+        }
     }
 }

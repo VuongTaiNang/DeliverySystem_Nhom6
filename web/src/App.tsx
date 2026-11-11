@@ -23,9 +23,13 @@ import type { UserRole } from "./api";
 import DispatchPage from "./DispatchPage";
 import SettlementsPage from "./SettlementsPage";
 import MapLocationPicker from "./components/MapLocationPicker";
+import { geocodeAddress } from "./lib/geocoding";
 import OperationsDashboard from "./OperationsDashboard";
+const OperationsShipmentsPage = lazy(() => import("./pages/OperationsShipmentsPage"));
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
 const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
+const OperationsCashPaymentsPage = lazy(() => import("./pages/OperationsCashPaymentsPage"));
+const OperationsRatingsPage = lazy(() => import("./pages/OperationsRatingsPage"));
 
 type Page =
   | "home"
@@ -35,6 +39,7 @@ type Page =
   | "staff"
   | "warehouse"
   | "incidents"
+  | "ratings"
   | "my-complaints"
   | "reports"
   | "pricing"
@@ -44,6 +49,7 @@ type Page =
   | "routes"
   | "areas"
   | "settlements"
+  | "cash-payments"
   | "account"
   | "payment-result";
 
@@ -55,6 +61,7 @@ const PATH_MAP: Record<Page, string> = {
   staff: "/staff",
   warehouse: "/warehouse",
   incidents: "/incidents",
+  ratings: "/operations/ratings",
   "my-complaints": "/my-complaints",
   reports: "/reports",
   pricing: "/pricing",
@@ -64,6 +71,7 @@ const PATH_MAP: Record<Page, string> = {
   routes: "/operations/routes",
   areas: "/operations/areas",
   settlements: "/settlements",
+  "cash-payments": "/operations/prepaid-fees",
   account: "/account",
   "payment-result": "/payment/result",
 };
@@ -105,8 +113,10 @@ function getPageFromLocation(): Page | null {
     if (val === "/orders/create" || val === "orders/create" || val === "/create" || val === "create") return "create";
     if (val === "/shipments" || val === "shipments") return "shipments";
     if (val === "/settlements" || val === "settlements") return "settlements";
+    if (val === "/operations/prepaid-fees" || val === "operations/prepaid-fees" || val === "cash-payments") return "cash-payments";
     if (val === "/reports" || val === "reports") return "reports";
     if (val === "/incidents" || val === "incidents") return "incidents";
+    if (val === "/operations/ratings" || val === "operations/ratings" || val === "ratings") return "ratings";
     if (val === "/my-complaints" || val === "my-complaints") return "my-complaints";
     if (val === "/warehouse" || val === "warehouse") return "warehouse";
     if (val === "/staff" || val === "staff") return "staff";
@@ -152,6 +162,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
     "staff",
     "warehouse",
     "incidents",
+    "ratings",
     "reports",
     "pricing",
     "pricing-services",
@@ -160,6 +171,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
     "routes",
     "areas",
     "settlements",
+    "cash-payments",
     "account",
   ],
 };
@@ -380,6 +392,8 @@ function Badge({ shipment }: {
     const [shipments, setShipments] = useState<Shipment[]>([]);
     const [form, setForm] = useState<ShipmentInput>(emptyForm);
     const [quote, setQuote] = useState<Quote | null>(null);
+    const [quoteError, setQuoteError] = useState<string | null>(null);
+    const [quoteInfo, setQuoteInfo] = useState("");
     const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
     const [areasLoading, setAreasLoading] = useState(false);
     const [areasError, setAreasError] = useState("");
@@ -602,6 +616,8 @@ function Badge({ shipment }: {
             return next;
         });
         setQuote(null);
+        setQuoteError(null);
+        setQuoteInfo("");
     }
     function openShipment(shipment: Shipment) {
         setSelectedId(shipment.id);
@@ -610,30 +626,83 @@ function Badge({ shipment }: {
     }
     function submitQuote(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        setQuoteError(null);
+        setQuoteInfo("");
+        const rejectQuote = (message: string) => {
+            setQuoteError(message);
+            setNotice({ kind: "error", text: message });
+        };
         if (user && !form.deliveryAreaId) {
-            setNotice({ kind: "error", text: "Vui lòng chọn phường/xã giao hàng để hệ thống tự phân công Staff." });
+            rejectQuote("Vui lòng chọn phường/xã giao hàng để hệ thống tự phân công Staff.");
             return;
         }
         if (form.pickupAreaId) {
             const area = serviceAreas.find((item) => item.id === form.pickupAreaId);
             if (area && !areaNameMatchesAddress(form.pickupAddress, area)) {
-                setNotice({ kind: "error", text: `Địa chỉ lấy hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                rejectQuote(`Địa chỉ lấy hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.`);
                 return;
             }
         }
         if (form.deliveryAreaId) {
             const area = serviceAreas.find((item) => item.id === form.deliveryAreaId);
             if (area && !areaNameMatchesAddress(form.deliveryAddress, area)) {
-                setNotice({ kind: "error", text: `Địa chỉ giao hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                rejectQuote(`Địa chỉ giao hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.`);
                 return;
             }
         }
+        // If the user entered full addresses but didn't select the map pins,
+        // locate each missing point on demand. Do NOT silently assume the
+        // center of a ward is the actual pickup/delivery address.
         if (form.pickupLatitude == null || form.pickupLongitude == null ||
             form.deliveryLatitude == null || form.deliveryLongitude == null) {
-            setNotice({ kind: "error", text: "Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá." });
+            void run(async () => {
+                const missing = [
+                    { kind: "pickup" as const, address: form.pickupAddress },
+                    { kind: "delivery" as const, address: form.deliveryAddress },
+                ].filter((item) => item.kind === "pickup"
+                    ? form.pickupLatitude == null || form.pickupLongitude == null
+                    : form.deliveryLatitude == null || form.deliveryLongitude == null);
+
+                for (const item of missing) {
+                    const title = item.kind === "pickup" ? "lấy hàng" : "giao hàng";
+                    let position;
+                    try {
+                        position = await geocodeAddress(item.address);
+                    } catch (error) {
+                        const detail = error instanceof Error ? error.message : "Không tìm được tọa độ.";
+                        const message = `Không tự xác định được vị trí ${title}: ${detail} Bạn có thể nhấp trên bản đồ hoặc nhập tọa độ thủ công từ Google Maps.`;
+                        setQuoteError(message);
+                        throw new Error(message);
+                    }
+
+                    // Only apply the result to the unchanged address.
+                    setForm((current) => {
+                        const key = item.kind === "pickup" ? "pickupAddress" : "deliveryAddress";
+                        if (current[key].trim() !== item.address.trim()) return current;
+                        return item.kind === "pickup"
+                            ? { ...current, pickupLatitude: position.latitude, pickupLongitude: position.longitude }
+                            : { ...current, deliveryLatitude: position.latitude, deliveryLongitude: position.longitude };
+                    });
+                }
+
+                setQuoteInfo(
+                    "Đã tự tìm tọa độ từ địa chỉ. Vui lòng kiểm tra hai điểm ghim trên bản đồ; vị trí có thể chỉ gần đúng, đặc biệt với số nhà/hẻm. Sau khi kiểm tra, bấm Tính phí lần nữa."
+                );
+                setQuoteError(null);
+                setNotice({ kind: "success", text: "Đã định vị địa chỉ. Hãy kiểm tra lại điểm lấy và giao hàng trước khi báo giá." });
+            });
             return;
         }
-        void run(async () => setQuote(await api.quote(form)));
+        void run(async () => {
+            try {
+                const calculated = await api.quote(form);
+                setQuote(calculated);
+                setQuoteError(null);
+            } catch (error) {
+                setQuoteError(error instanceof Error ? error.message : "Không tính được phí vận chuyển.");
+                throw error;
+            }
+        });
     }
     const selected = shipments.find((item) => item.id === selectedId);
     const filtered = shipments.filter((item) => {
@@ -657,6 +726,7 @@ function Badge({ shipment }: {
       staff: "Công việc giao nhận",
       warehouse: "Quản lý kho và trung chuyển",
       incidents: "Quản lý sự cố và khiếu nại",
+      ratings: "Đánh giá dịch vụ",
       "my-complaints": "Khiếu nại của tôi",
       reports: "Báo cáo hoạt động",
       pricing: "Cấu hình bảng giá",
@@ -666,6 +736,7 @@ function Badge({ shipment }: {
       routes: "Quản lý tuyến giao hàng",
       areas: "Quản lý khu vực",
       settlements: "Đối soát COD",
+      "cash-payments": "Thu phí trả trước",
       account: "Tài khoản của tôi",
       "payment-result": "Kết quả thanh toán VNPay",
     };
@@ -1031,6 +1102,8 @@ function Badge({ shipment }: {
                           }));
 
                           setQuote(null);
+                          setQuoteError(null);
+                          setQuoteInfo("");
                         }}
                         />
                     </div>
@@ -1056,6 +1129,8 @@ function Badge({ shipment }: {
                           }));
 
                           setQuote(null);
+                          setQuoteError(null);
+                          setQuoteInfo("");
                         }}
                       />
                     </div>
@@ -1128,6 +1203,11 @@ function Badge({ shipment }: {
                       <option value="recipient">Người nhận trả</option>
                       <option value="deduct_cod">Khấu trừ COD</option>
                     </select>
+                    {form.feePayer === "shop_prepaid" && (
+                      <small className="muted">
+                        Sau khi tạo đơn, Shop mở chi tiết đơn để chọn thanh toán qua VNPay hoặc đăng ký nộp tiền mặt. Đơn chỉ được phân công khi phí đã được xác nhận.
+                      </small>
+                    )}
                   </label>
 
                   <label className="full">
@@ -1136,6 +1216,14 @@ function Badge({ shipment }: {
                   </label>
                 </div>
 
+                {!quote && (quoteError || quoteInfo || form.pickupLatitude == null ||
+                  form.pickupLongitude == null || form.deliveryLatitude == null ||
+                  form.deliveryLongitude == null) && (
+                    <div className={`quote-inline-notice${!quoteError ? " is-info" : ""}`} role="status">
+                      {quoteError || quoteInfo ||
+                        "Chưa có đủ tọa độ. Khi bấm Tính phí, hệ thống sẽ tự tìm vị trí từ hai địa chỉ đã nhập. Bạn cũng có thể đánh dấu thủ công trên bản đồ."}
+                    </div>
+                )}
                 <div className="form-footer">
                   <div>
                     <strong>
@@ -1147,8 +1235,8 @@ function Badge({ shipment }: {
                   </div>
 
                   <div className="actions">
-                    <button type="submit">
-                      {busy ? "Đang xử lý…" : "Tính phí"}
+                    <button type="submit" disabled={busy}>
+                      {busy ? "Đang tìm vị trí / tính phí…" : "Tính phí"}
                     </button>
 
                     {quote && (<button type="button" className="primary" onClick={() => void run(async () => {
@@ -1189,9 +1277,9 @@ function Badge({ shipment }: {
               </fieldset>
               </form>) : page === "staff" ? (<StaffSprint2 />) : page === "my-complaints" ? (<MyComplaints />) : page === "warehouse" ? (<WarehousePage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
-            }}/>) : page === "incidents" ? (<IncidentManagement />) : page === "reports" ? (<ReportsPage />) : page === "pricing" ? (<PricingPage />) : page === "pricing-services" ? (<PricingServicesPage onNavigate={navigate} />) : page === "support" ? (<PolicyFAQPage />) : page === "dispatch" ? (<DispatchPage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
+            }}/>) : page === "incidents" ? (<IncidentManagement />) : page === "ratings" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải đánh giá…</p></section>}><OperationsRatingsPage /></Suspense>) : page === "reports" ? (<ReportsPage />) : page === "pricing" ? (<PricingPage />) : page === "pricing-services" ? (<PricingServicesPage onNavigate={navigate} />) : page === "support" ? (<PolicyFAQPage />) : page === "dispatch" ? (<DispatchPage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
-            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
+            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "cash-payments" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải thu phí trả trước…</p></section>}><OperationsCashPaymentsPage /></Suspense>) : page === "payment-result" ? null : page === "account" ? (
               <section className="panel"><h2>Tài khoản</h2><p>Thông tin tài khoản: {user?.name ?? "Khách"}</p></section>
             ) : (<section className="panel">
               <div className="panel-heading">
@@ -1292,14 +1380,14 @@ function Badge({ shipment }: {
               
               <IncidentPanel key={selected.id} shipmentId={selected.id}/>
               {normalizedRole === "customer" && (
-                <VnPayPanel key={selected.id} shipmentId={selected.id} feePayer={selected.feePayer} />
+                <VnPayPanel key={selected.id} shipmentId={selected.id} feePayer={selected.feePayer} fee={selected.fee} />
               )}
 
               {null}
             </section>)}
     </>);
     const operationsSection: OperationsSection =
-      page === "dashboard" ? "dashboard" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
+      page === "dashboard" ? "dashboard" : page === "cash-payments" ? "cash-payments" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : page === "ratings" ? "ratings" : "orders";
     if (normalizedRole === "operations") {
       return (
         <OperationsLayout
@@ -1314,6 +1402,10 @@ function Badge({ shipment }: {
                 ? "routes"
                 : section === "areas"
                 ? "areas"
+                : section === "cash-payments"
+                ? "cash-payments"
+                : section === "ratings"
+                ? "ratings"
                 : "settlements"
             )
           }
@@ -1331,7 +1423,9 @@ function Badge({ shipment }: {
           )}
            {page === "dashboard" && normalizedRole === "operations"
             ? <OperationsDashboard />
-            : renderContent}
+            : page === "shipments"
+              ? <Suspense fallback={<section className="panel"><p role="status">Đang tải danh sách vận đơn…</p></section>}><OperationsShipmentsPage /></Suspense>
+              : renderContent}
         </OperationsLayout>
       );
     }

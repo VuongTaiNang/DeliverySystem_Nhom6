@@ -28,6 +28,28 @@ class _MapLocationPickerState extends State<MapLocationPicker> {
   final MapController _mapController = MapController();
 
   @override
+  void didUpdateWidget(covariant MapLocationPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final selected = widget.value;
+    if (selected == null || selected == oldWidget.value) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // FlutterMap may not be attached yet on the very first frame.
+      try {
+        _mapController.move(selected, 16);
+      } catch (_) {
+        // Keep manual map selection available even if repositioning fails.
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final selected = widget.value;
     return Column(

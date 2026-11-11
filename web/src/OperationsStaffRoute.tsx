@@ -40,8 +40,9 @@ export default function OperationsStaffRoute() {
       areas: "/operations/areas",
       staff: "/operations/staff-management",
       tracking: "/operations/staff-tracking",
-      incidents: "/incidents",
+      incidents: "/incidents", ratings: "/operations/ratings",
       settlements: "/settlements",
+      "cash-payments": "/operations/prepaid-fees",
     };
     window.location.assign(path[section]);
   }

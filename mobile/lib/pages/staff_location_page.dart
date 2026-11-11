@@ -135,6 +135,7 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
           else ...[
             DropdownButtonFormField<int>(
               value: _selectedAssignmentId,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Nhiệm vụ đang thực hiện',
                 border: OutlineInputBorder(),
@@ -143,7 +144,11 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
                   .map(
                     (a) => DropdownMenuItem(
                       value: a.assignmentId,
-                      child: Text('${a.shipmentId} · ${a.shipmentStatus}'),
+                      child: Text(
+                        '${a.shipmentId} · ${a.shipmentStatus}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   )
                   .toList(),

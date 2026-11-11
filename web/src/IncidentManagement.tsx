@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   api,
   INCIDENT_STATUSES,
   COMPLAINT_CATEGORIES,
+  STAFF_INCIDENT_CATEGORIES,
   typeLabel,
 } from "./api";
 import type {
@@ -16,6 +17,21 @@ import { formatVietnamDateTime } from "./lib/dateTime";
 
 type IncidentSource = "" | "customer" | "staff";
 
+async function withRequestTimeout<T>(request: Promise<T>, milliseconds = 12000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Tải danh sách quá thời gian cho phép. Hãy kiểm tra Backend rồi thử lại.")),
+      milliseconds,
+    );
+  });
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export default function IncidentManagement() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [filter, setFilter] = useState<IncidentStatus | "">("");
@@ -26,6 +42,8 @@ export default function IncidentManagement() {
   const [loadError, setLoadError] = useState("");
   const [success, setSuccess] = useState("");
   const [reload, setReload] = useState(0);
+  const selectedIdRef = useRef<number | null>(null);
+  selectedIdRef.current = selectedId;
 
   useEffect(() => {
     if (!success) return;
@@ -41,7 +59,7 @@ export default function IncidentManagement() {
       setLoadError("");
 
       try {
-        const data = await api.listAllIncidents(source || undefined);
+        const data = await withRequestTimeout(api.listAllIncidents(source || undefined));
         if (active) setIncidents(data);
       } catch (error) {
         if (active) {
@@ -59,7 +77,7 @@ export default function IncidentManagement() {
     void load(true);
 
     const timer = window.setInterval(() => {
-      if (document.visibilityState !== "hidden" && selectedId === null) {
+      if (document.visibilityState !== "hidden" && selectedIdRef.current === null) {
         void load(false);
       }
     }, 12000);
@@ -68,7 +86,7 @@ export default function IncidentManagement() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [reload, selectedId, source]);
+  }, [reload, source]);
 
   const term = search.trim().toLocaleLowerCase("vi");
 
@@ -103,7 +121,7 @@ export default function IncidentManagement() {
 
           <button
             type="button"
-            disabled={loading || Boolean(selected)}
+            disabled={loading}
             onClick={() => setReload((current) => current + 1)}
           >
             {loading ? "Đang tải…" : "Tải lại"}
@@ -261,6 +279,12 @@ function IncidentEditor({
   onClassified,
   onClassifyError,
 }: IncidentEditorProps) {
+  const isStaffIncident = incident.source === "staff";
+  const categories = isStaffIncident ? STAFF_INCIDENT_CATEGORIES : COMPLAINT_CATEGORIES;
+  const categoryName = incident.category == null ? "" :
+    (categories as Record<string, string>)[incident.category] ??
+    (COMPLAINT_CATEGORIES as Record<string, string>)[incident.category] ??
+    incident.category;
   const [response, setResponse] = useState(incident.response ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -329,7 +353,7 @@ function IncidentEditor({
     <section className="panel">
       <div className="panel-heading">
         <div>
-          <h2>{typeLabel(incident.type)}</h2>
+          <h2>{isStaffIncident ? "Sự cố nhân viên" : "Khiếu nại khách hàng"}: {typeLabel(incident.type)}</h2>
           <p className="muted tracking-code">
             Vận đơn: {incident.shipmentId}
           </p>
@@ -354,7 +378,7 @@ function IncidentEditor({
 
       <div className="incident-editor-space">
         <label>
-          Phân loại
+          {isStaffIncident ? "Nhóm nguyên nhân sự cố" : "Phân loại khiếu nại"}
           <select
             value={incident.category ?? ""}
             disabled={incident.status === "resolved"}
@@ -363,7 +387,12 @@ function IncidentEditor({
             <option value="" disabled>
               -- Chọn phân loại --
             </option>
-            {Object.entries(COMPLAINT_CATEGORIES).map(([key, label]) => (
+            {incident.category && !(incident.category in categories) && (
+              <option value={incident.category}>
+                {categoryName} (phân loại trước đây)
+              </option>
+            )}
+            {Object.entries(categories).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
               </option>
@@ -402,7 +431,9 @@ function IncidentEditor({
           <fieldset disabled={busy}>
             {incident.status === "pending" ? (
               <p className="muted">
-                Bắt đầu xử lý để chuyển báo cáo sang trạng thái{" "}
+                {isStaffIncident
+                  ? "Tiếp nhận báo cáo của Staff để kiểm tra nguyên nhân, hỗ trợ giao nhận và chuyển sang trạng thái"
+                  : "Bắt đầu xử lý để chuyển khiếu nại sang trạng thái"}{" "}
                 <strong>Đang xử lý</strong>.
               </p>
             ) : (
@@ -414,7 +445,9 @@ function IncidentEditor({
                   maxLength={1000}
                   required
                   onChange={(event) => setResponse(event.target.value)}
-                  placeholder="Mô tả nguyên nhân, biện pháp và kết quả xử lý…"
+                  placeholder={isStaffIncident
+                    ? "Hướng xử lý sự cố, hỗ trợ Staff và kết quả thực hiện…"
+                    : "Mô tả nguyên nhân, biện pháp và kết quả xử lý…"}
                 />
                 <span className="muted">
                   {response.length}/1.000 ký tự

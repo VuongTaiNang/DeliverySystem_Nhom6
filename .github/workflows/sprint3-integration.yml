@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - integration/sprint3-pre-report
+      - feature/s3-service-dispatch
   pull_request:
     branches:
       - master
+      - integration/sprint3-pre-report
 
 permissions:
   contents: read
@@ -22,6 +24,8 @@ jobs:
           dotnet-version: '9.0.x'
       - run: dotnet restore backend/Back_DeliverySystem/Back_DeliverySystem/Back_DeliverySystem.csproj
       - run: dotnet build backend/Back_DeliverySystem/Back_DeliverySystem/Back_DeliverySystem.csproj --configuration Release --no-restore
+      - name: Validate dispatch strategy/GPS policy
+        run: dotnet run --project backend/Back_DeliverySystem/DispatchPolicySmokeTests/DispatchPolicySmokeTests.csproj --configuration Release
       - name: Verify EF Core migration snapshot matches code
         env:
           Jwt__Key: "ci-only-test-key-32-plus-chars-please-never-use-in-production"

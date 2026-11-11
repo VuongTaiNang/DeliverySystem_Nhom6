@@ -23,6 +23,14 @@ public class OperationsStaffTrackingController : ControllerBase
             join user in _db.Users.AsNoTracking() on staff.UserId equals user.Id
             join assignment in _db.DeliveryAssignments.AsNoTracking() on location.AssignmentId equals assignment.Id
             join shipment in _db.Shipments.AsNoTracking() on location.ShipmentId equals shipment.Id
+            // Không hiển thị tọa độ của phân công đã kết thúc, kể cả khi bản ghi GPS còn lưu.
+            where assignment.IsActive &&
+                  (assignment.Status == "accepted" || assignment.Status == "in_progress") &&
+                  shipment.Status != "delivered" &&
+                  shipment.Status != "returned" &&
+                  shipment.Status != "return_confirmed" &&
+                  shipment.Status != "cancelled" &&
+                  shipment.Status != "canceled"
             orderby location.UpdatedAt descending
             select new { location, staff, user, assignment, shipment }
         ).ToListAsync();
@@ -50,7 +58,7 @@ public class OperationsStaffTrackingController : ControllerBase
                 row.location.AccuracyMeters,
                 row.location.UpdatedAt,
                 isStale = row.location.UpdatedAt < now.AddMinutes(-5),
-                isAssignmentActive = row.assignment.IsActive && row.assignment.Status == "accepted",
+                isAssignmentActive = row.assignment.IsActive,
                 shipmentStatus = row.shipment.Status,
                 targetType = pickup ? "pickup" : "delivery",
                 targetAddress = pickup ? row.shipment.PickupAddress : row.shipment.DeliveryAddress,
@@ -62,6 +70,35 @@ public class OperationsStaffTrackingController : ControllerBase
             };
         });
         return Ok(result);
+    }
+
+    // Lịch sử ngắn chỉ chứa mã vận đơn và thời điểm hoàn tất, không trả tọa độ GPS
+    // sau khi đơn đã được giao thành công.
+    [HttpGet("recent-completed")]
+    public async Task<IActionResult> RecentCompleted()
+    {
+        var since = DateTime.UtcNow.AddDays(-1);
+        var completed = await (
+            from assignment in _db.DeliveryAssignments.AsNoTracking()
+            join staff in _db.Staffs.AsNoTracking() on assignment.StaffId equals staff.Id
+            join user in _db.Users.AsNoTracking() on staff.UserId equals user.Id
+            join shipment in _db.Shipments.AsNoTracking() on assignment.ShipmentId equals shipment.Id
+            where !assignment.IsActive && assignment.Status == "completed" &&
+                  assignment.EndedAt.HasValue && assignment.EndedAt.Value >= since &&
+                  shipment.Status == "delivered"
+            orderby assignment.EndedAt descending
+            select new
+            {
+                assignmentId = assignment.Id,
+                staffId = staff.Id,
+                staff.EmployeeCode,
+                staffName = user.FullName,
+                shipmentId = shipment.Id,
+                completedAt = assignment.EndedAt
+            }
+        ).Take(10).ToListAsync();
+
+        return Ok(completed);
     }
 
     private static bool IsPickupStage(string status) => status is "pending_pickup" or "picking_up" or "pickup_failed";
