@@ -187,7 +187,7 @@ export default function SettlementsPage() {
               <p className="muted">Đã chọn: <strong>{chosen.length} đơn</strong> · COD {money(totalCod)} ·
                 Khấu trừ {money(deduction)}.
               </p>
-              <div className="form-grid">
+              <div className="form-grid settlement-adjustment-fields">
                 <label>
                   Điều chỉnh (đ)
                   <input type="number" step="1" required value={Number.isFinite(adjustment) ? adjustment : ""} onChange={(event) => setAdjustment(event.target.valueAsNumber)}/>
