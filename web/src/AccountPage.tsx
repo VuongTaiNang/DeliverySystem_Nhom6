@@ -125,11 +125,21 @@ export default function AccountPage() {
   }
 
   if (loading) {
-    return <section className="panel account-page"><p role="status">Đang tải thông tin tài khoản…</p></section>;
+    return <section className="panel account-card"><p role="status">Đang tải thông tin tài khoản…</p></section>;
   }
 
   return (
     <div className="account-page">
+      <div className="account-overview">
+        <div className="account-overview__avatar" aria-hidden="true">
+          {(profile.fullName || user?.name || "E").trim().charAt(0).toUpperCase() || "E"}
+        </div>
+        <div>
+          <p className="account-overview__eyebrow">EXPRESS · TÀI KHOẢN</p>
+          <h1>Quản lý tài khoản</h1>
+          <p>Cập nhật thông tin cá nhân và bảo vệ tài khoản của bạn.</p>
+        </div>
+      </div>
       {notice && <div className={`notice ${notice.kind}`} role="status">{notice.text}</div>}
 
       <section className="panel account-card">

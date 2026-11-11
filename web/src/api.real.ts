@@ -18,6 +18,12 @@ export const STATUS = {
 
 export type Status = keyof typeof STATUS;
 
+export const EVENT_STATUS: Record<Status | "arrived_at_pickup" | "arrived_at_delivery", string> = {
+  ...STATUS,
+  arrived_at_pickup: "Nhân viên đã đến điểm lấy hàng",
+  arrived_at_delivery: "Nhân viên đã đến điểm giao hàng",
+};
+
 export type FeePayer = "shop_prepaid" | "recipient" | "deduct_cod";
 
 export interface ServiceArea {
@@ -25,6 +31,7 @@ export interface ServiceArea {
   code: string;
   name: string;
   type: "ward" | "commune" | "special_zone";
+  isActive?: boolean;
 }
 
 
@@ -61,7 +68,7 @@ export interface Quote {
 }
 
 export interface TrackingEvent {
-  status: Status;
+  status: Status | "arrived_at_pickup" | "arrived_at_delivery";
   at: string;
   note: string;
 }
@@ -174,6 +181,47 @@ export type IncidentType = keyof typeof INCIDENT_TYPES;
 
 export type IncidentStatus = keyof typeof INCIDENT_STATUSES;
 
+// Phân loại khiếu nại (do Operations chọn)
+export const COMPLAINT_CATEGORIES = {
+  delivery_delay: "Chậm giao hàng",
+  goods_damage: "Hư hỏng / thất lạc hàng",
+  staff_attitude: "Thái độ nhân viên",
+  cod_payment: "COD / thanh toán",
+  other: "Khác",
+} as const;
+
+export type ComplaintCategory = keyof typeof COMPLAINT_CATEGORIES;
+
+// Loại sự cố do Staff báo cáo khi giao hàng
+export const STAFF_INCIDENT_TYPES = {
+  customer_unreachable: "Không liên lạc được người nhận",
+  wrong_address: "Sai / thiếu địa chỉ",
+  customer_refused: "Người nhận từ chối nhận hàng",
+  goods_damaged: "Hàng bị hư hỏng",
+  vehicle_issue: "Sự cố phương tiện",
+  accident: "Tai nạn giao thông",
+  other: "Sự cố khác",
+} as const;
+
+// Nhãn hiển thị cho cả khiếu nại (customer) và sự cố (staff)
+export function typeLabel(type: string): string {
+  return (
+    (INCIDENT_TYPES as Record<string, string>)[type] ??
+    (STAFF_INCIDENT_TYPES as Record<string, string>)[type] ??
+    type
+  );
+}
+
+export interface ComplaintHistoryItem {
+  id: number;
+  action: "created" | "classified" | "processing" | "resolved";
+  fromStatus: string | null;
+  toStatus: string | null;
+  note: string | null;
+  actorRole: "customer" | "staff" | "operations";
+  createdAt: string;
+}
+
 export interface IncidentInput {
   type: IncidentType;
   content: string;
@@ -182,6 +230,8 @@ export interface IncidentInput {
 export interface Incident extends IncidentInput {
   id: number;
   shipmentId: string;
+  source?: "customer" | "staff";
+  category?: ComplaintCategory | null;
   status: IncidentStatus;
   createdAt: string;
   response: string | null;
@@ -432,7 +482,11 @@ async list(): Promise<Shipment[]> {
     return request<Shipment[]>("/shipments");
 },
 async listAreas(): Promise<ServiceArea[]> {
-    return request<ServiceArea[]>("/areas");
+    try {
+        return await request<ServiceArea[]>("/operations/areas");
+    } catch {
+        return await request<ServiceArea[]>("/areas");
+    }
 },
 async quote(input: ShipmentInput): Promise<Quote> {
     validate(input);
@@ -462,10 +516,10 @@ async listIncidents(shipmentId: string): Promise<Incident[]> {
 async createIncident(shipmentId: string, input: IncidentInput): Promise<Incident> {
     const content = input.content.trim();
     if (!Object.prototype.hasOwnProperty.call(INCIDENT_TYPES, input.type)) {
-        throw new Error("Loại sự cố không hợp lệ.");
+        throw new Error("Loại khiếu nại không hợp lệ.");
     }
-    if (content.length < 10 || content.length > 2000) {
-        throw new Error("Nội dung sự cố phải từ 10 đến 2.000 ký tự.");
+    if (content.length < 10 || content.length > 1000) {
+        throw new Error("Nội dung khiếu nại phải từ 10 đến 1.000 ký tự.");
     }
     return request<Incident>(
         `/shipments/${encodeURIComponent(shipmentId)}/complaints`,
@@ -494,8 +548,31 @@ async recordHubAction(shipmentId: string, input: {
         body: JSON.stringify(input),
     });
 },
-async listAllIncidents(): Promise<Incident[]> {
-  return request<Incident[]>("/complaints");
+async listAllIncidents(source?: "customer" | "staff"): Promise<Incident[]> {
+  return request<Incident[]>(
+    source ? `/complaints?source=${source}` : "/complaints"
+  );
+},
+
+async listMyComplaints(): Promise<Incident[]> {
+  return request<Incident[]>("/complaints/mine");
+},
+
+async getComplaintHistory(incidentId: number): Promise<ComplaintHistoryItem[]> {
+  return request<ComplaintHistoryItem[]>(`/complaints/${incidentId}/history`);
+},
+
+async classifyComplaint(
+  incidentId: number,
+  category: ComplaintCategory
+): Promise<void> {
+  if (!Object.prototype.hasOwnProperty.call(COMPLAINT_CATEGORIES, category)) {
+    throw new Error("Phân loại không hợp lệ.");
+  }
+  await request<unknown>(`/complaints/${incidentId}/classify`, {
+    method: "PATCH",
+    body: JSON.stringify({ category }),
+  });
 },
 
 async updateIncident(
@@ -526,9 +603,9 @@ async updateIncident(
     );
   }
 
-  if (response.length > 2000) {
+  if (response.length > 1000) {
     throw new Error(
-      "Kết quả giải quyết không được vượt quá 2.000 ký tự."
+      "Kết quả giải quyết không được vượt quá 1.000 ký tự."
     );
   }
 
@@ -656,4 +733,4 @@ async logout(): Promise<void> {
   localStorage.removeItem("express-token");
 }
 
-};
+}

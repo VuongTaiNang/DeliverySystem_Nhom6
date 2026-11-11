@@ -44,12 +44,12 @@ public sealed class ShipmentAutoAssignmentFilter : IAsyncActionFilter
 
         if (request.PickupAreaId.HasValue)
         {
-            var pickupAreaValid = await _db.Areas.AnyAsync(
+            var pickupArea = await _db.Areas.AsNoTracking().FirstOrDefaultAsync(
                 x => x.Id == request.PickupAreaId.Value && x.IsActive,
                 cancellationToken
             );
 
-            if (!pickupAreaValid)
+            if (pickupArea == null)
             {
                 context.Result = new BadRequestObjectResult(new
                 {
@@ -57,20 +57,38 @@ public sealed class ShipmentAutoAssignmentFilter : IAsyncActionFilter
                 });
                 return;
             }
+
+            if (!AreaAddressValidator.MatchesDeclaredArea(request.PickupAddress, pickupArea))
+            {
+                context.Result = new BadRequestObjectResult(new
+                {
+                    message = $"Địa chỉ lấy hàng phải thuộc cùng khu vực phường/xã đã chọn ({pickupArea.Name}). Hãy ghi rõ tên phường/xã trong địa chỉ, ví dụ: 123 Tên Đường, {pickupArea.Name}, TP.HCM."
+                });
+                return;
+            }
         }
 
         if (request.DeliveryAreaId.HasValue)
         {
-            var deliveryAreaValid = await _db.Areas.AnyAsync(
+            var deliveryArea = await _db.Areas.AsNoTracking().FirstOrDefaultAsync(
                 x => x.Id == request.DeliveryAreaId.Value && x.IsActive,
                 cancellationToken
             );
 
-            if (!deliveryAreaValid)
+            if (deliveryArea == null)
             {
                 context.Result = new BadRequestObjectResult(new
                 {
                     message = "Khu vực giao hàng không tồn tại hoặc đã ngừng hoạt động."
+                });
+                return;
+            }
+
+            if (!AreaAddressValidator.MatchesDeclaredArea(request.DeliveryAddress, deliveryArea))
+            {
+                context.Result = new BadRequestObjectResult(new
+                {
+                    message = $"Địa chỉ giao hàng phải thuộc cùng khu vực phường/xã đã chọn ({deliveryArea.Name}). Hãy ghi rõ tên phường/xã trong địa chỉ, ví dụ: 456 Tên Đường, {deliveryArea.Name}, TP.HCM."
                 });
                 return;
             }

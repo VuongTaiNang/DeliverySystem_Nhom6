@@ -1,12 +1,15 @@
 import type { ReactNode } from "react";
 
 /** Shared Operations shell. Business screens are owned by the respective feature teams. */
-export type OperationsSection = "orders" | "routes" | "staff" | "incidents" | "settlements";
+export type OperationsSection = "dashboard" | "orders" | "routes" | "areas" | "staff" | "tracking" | "incidents" | "settlements";
 
 export const operationsItems: { key: OperationsSection; title: string; icon: string }[] = [
+  { key: "dashboard", title: "Tổng hợp số liệu ", icon: "▤" },
   { key: "orders", title: "Đơn hàng", icon: "▤" },
   { key: "routes", title: "Tuyến giao hàng", icon: "↔" },
+  { key: "areas", title: "Khu vực", icon: "⚑" },
   { key: "staff", title: "Nhân viên", icon: "👤" },
+  { key: "tracking", title: "Vị trí và ETA", icon: "⌖" },
   { key: "incidents", title: "Khiếu nại", icon: "!" },
   { key: "settlements", title: "Đối soát COD", icon: "₫" },
 ];
@@ -14,10 +17,14 @@ export const operationsItems: { key: OperationsSection; title: string; icon: str
 function resolveCurrentSection(fallback: OperationsSection): OperationsSection {
   if (typeof window === "undefined") return fallback;
   const path = window.location.pathname.toLowerCase();
+  if (path === "/dashboard") return "dashboard";
   if (path === "/operations/staff-management") return "staff";
+  if (path === "/operations/staff-tracking") return "tracking";
   if (path === "/incidents") return "incidents";
   if (path === "/operations/routes") return "routes";
+  if (path === "/operations/areas") return "areas";
   if (path === "/settlements") return "settlements";
+  
   return fallback;
 }
 
@@ -35,6 +42,7 @@ export function OperationsSidebar({
       window.location.assign("/operations/staff-management");
       return;
     }
+    if (item === "tracking") { window.location.assign("/operations/staff-tracking"); return; }
     if (item === "incidents") {
       window.location.assign("/incidents");
       return;

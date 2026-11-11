@@ -5,6 +5,7 @@ export type AuthMode = "login" | "register";
 
 export interface AuthContextValue {
   user: SessionUser | null;
+  checkingSession: boolean;
   logout: () => Promise<void>;
   openAuth: (mode?: AuthMode) => void;
   closeAuth: () => void;

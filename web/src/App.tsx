@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { api, money, STATUS } from "./api";
+import { api, money, STATUS, EVENT_STATUS } from "./api";
 import type { PickupLocation, Quote, ServiceArea, Shipment, ShipmentInput } from "./api";
 import "./App.css";
 import IncidentPanel from "./IncidentPanel";
+import MyComplaints from "./MyComplaints";
 import StaffSprint2 from "./StaffSprint2";
 import VnPayPanel from "./VnPayPanel";
 import PaymentResultPage from "./PaymentResultPage";
@@ -22,7 +23,9 @@ import type { UserRole } from "./api";
 import DispatchPage from "./DispatchPage";
 import SettlementsPage from "./SettlementsPage";
 import MapLocationPicker from "./components/MapLocationPicker";
+import OperationsDashboard from "./OperationsDashboard";
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
+const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
 
 type Page =
   | "home"
@@ -32,12 +35,14 @@ type Page =
   | "staff"
   | "warehouse"
   | "incidents"
+  | "my-complaints"
   | "reports"
   | "pricing"
   | "pricing-services"
   | "support"
   | "dispatch"
   | "routes"
+  | "areas"
   | "settlements"
   | "account"
   | "payment-result";
@@ -50,16 +55,36 @@ const PATH_MAP: Record<Page, string> = {
   staff: "/staff",
   warehouse: "/warehouse",
   incidents: "/incidents",
+  "my-complaints": "/my-complaints",
   reports: "/reports",
   pricing: "/pricing",
   "pricing-services": "/pricing-services",
   support: "/support",
   dispatch: "/dispatch",
   routes: "/operations/routes",
+  areas: "/operations/areas",
   settlements: "/settlements",
   account: "/account",
   "payment-result": "/payment/result",
 };
+
+// Client-side hint matching the server's explicit ward/commune address rule.
+// This checks declared text only; GIS boundary verification requires geographic data.
+function areaNameMatchesAddress(address: string, area: ServiceArea): boolean {
+  const fold = (value: string) => value.toLowerCase().replace(/đ/g, "d")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ").trim();
+
+  const fullName = fold(area.name);
+  const shortName = fullName.replace(/^(phuong|xa|dac khu)\s+/, "");
+  const labels = area.type === "commune"
+    ? [`xa ${shortName}`, `x. ${shortName}`, `x.${shortName}`]
+    : area.type === "special_zone"
+      ? [`dac khu ${shortName}`]
+      : [`phuong ${shortName}`, `p. ${shortName}`, `p.${shortName}`, `p ${shortName}`];
+
+  return fold(address).split(/[,;]/).some((part) => labels.includes(part.trim()));
+}
 
 function getPageFromLocation(): Page | null {
   if (typeof window === "undefined") return null;
@@ -82,11 +107,13 @@ function getPageFromLocation(): Page | null {
     if (val === "/settlements" || val === "settlements") return "settlements";
     if (val === "/reports" || val === "reports") return "reports";
     if (val === "/incidents" || val === "incidents") return "incidents";
+    if (val === "/my-complaints" || val === "my-complaints") return "my-complaints";
     if (val === "/warehouse" || val === "warehouse") return "warehouse";
     if (val === "/staff" || val === "staff") return "staff";
     if (val === "/pricing" || val === "pricing") return "pricing";
     if (val === "/dispatch" || val === "dispatch") return "dispatch";
     if (val === "/operations/routes" || val === "operations/routes" || val === "routes") return "routes";
+    if (val === "/operations/areas" || val === "operations/areas" || val === "areas") return "areas";
     if (val === "/dashboard" || val === "dashboard") return "dashboard";
     return null;
   };
@@ -106,6 +133,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
   customer: [
     "dashboard",
     "shipments",
+    "my-complaints",
     "create",
     "pricing-services",
     "support",
@@ -130,6 +158,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
     "support",
     "dispatch",
     "routes",
+    "areas",
     "settlements",
     "account",
   ],
@@ -187,7 +216,7 @@ function Badge({ shipment }: {
     </span>);
 }
   export default function App() {
-    const { user, logout } = useAuth();
+    const { user, checkingSession, logout } = useAuth();
     const [paymentStatuses, setPaymentStatuses] = useState<Record<string, string>>({});
 
     const normalizedRole: UserRole | null = user
@@ -225,22 +254,44 @@ function Badge({ shipment }: {
     });
 
       useEffect(() => {
-        // VNPay Return URL tải lại trang: giữ đường dẫn kết quả trong khi khôi phục JWT.
-        if (getPageFromLocation() === "payment-result") {
-          setPage("payment-result");
-          return;
-        }
-        if (!user) {
-          setPage("home");
-          return;
-        }
-        setPage((current) => {
-          if (!allowedPages.includes(current) || current === "home") {
-            return normalizedRole === "staff" ? "staff" : normalizedRole === "operations" ? "shipments" : "dashboard";
-          }
-          return current;
-        });
-      }, [user, normalizedRole]);
+  // Chờ AuthGate kiểm tra và khôi phục phiên đăng nhập.
+  if (checkingSession) {
+    return;
+  }
+
+  // Giữ nguyên trang kết quả thanh toán VNPay.
+  if (getPageFromLocation() === "payment-result") {
+    setPage("payment-result");
+    return;
+  }
+
+  // Nếu thực sự chưa đăng nhập thì về trang chủ.
+  if (!user) {
+    setPage("home");
+    return;
+  }
+
+  // Sau khi đăng nhập được khôi phục, ưu tiên trang trong URL.
+  const pageFromUrl = getPageFromLocation();
+
+  if (pageFromUrl && allowedPages.includes(pageFromUrl)) {
+    setPage(pageFromUrl);
+    return;
+  }
+
+  // Nếu URL không hợp lệ với vai trò hiện tại thì dùng trang mặc định.
+  setPage((current) => {
+    if (!allowedPages.includes(current) || current === "home") {
+      return normalizedRole === "staff"
+        ? "staff"
+        : normalizedRole === "operations"
+          ? "shipments"
+          : "dashboard";
+    }
+
+    return current;
+  });
+}, [user, normalizedRole, checkingSession]);
 
     const navigate = (target: Page | string) => {
         let targetPage: Page = "home";
@@ -389,43 +440,45 @@ function Badge({ shipment }: {
     const [pickupLoading, setPickupLoading] =
       useState(user?.role === "customer");
       useEffect(() => {
-        if (!user) {
-          setShipments([]);
-          setLoading(false);
-          return;
-        }
+  if (!user || normalizedRole === "operations") {
+    if (!user) {
+      setShipments([]);
+    }
+    setLoading(false);
+    return;
+  }
 
-        let active = true;
+  let active = true;
 
-        setLoading(true);
+  setLoading(true);
 
-        api.list()
-          .then((data) => {
-            if (active) {
-              setShipments(data);
-            }
-          })
-          .catch((error: unknown) => {
-            if (active) {
-              setNotice({
-                kind: "error",
-                text:
-                  error instanceof Error
-                    ? error.message
-                    : "Không tải được dữ liệu.",
-              });
-            }
-          })
-          .finally(() => {
-            if (active) {
-              setLoading(false);
-            }
-          });
+  api.list()
+    .then((data) => {
+      if (active) {
+        setShipments(data);
+      }
+    })
+    .catch((error: unknown) => {
+      if (active) {
+        setNotice({
+          kind: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Không tải được dữ liệu.",
+        });
+      }
+    })
+    .finally(() => {
+      if (active) {
+        setLoading(false);
+      }
+    });
 
-        return () => {
-          active = false;
-        };
-      }, [user]);
+  return () => {
+    active = false;
+  };
+}, [user, normalizedRole]);
       
       useEffect(() => {
         if (!user || user.role !== "customer") {
@@ -488,27 +541,7 @@ function Badge({ shipment }: {
       };
     }, [user?.id, normalizedRole, page]);
 
-    useEffect(() => {
-      if (!user || normalizedRole !== "operations" || page !== "shipments") return;
-      let alive = true;
-      const refresh = async () => {
-        try {
-          const rows = await api.list();
-          if (alive) setShipments(rows);
-        } catch (error) {
-          console.error("Không thể làm mới đơn Operations:", error);
-        }
-      };
-      void refresh();
-      const timer = window.setInterval(() => { if (document.visibilityState !== "hidden") void refresh(); }, 15000);
-      const focus = () => { void refresh(); };
-      window.addEventListener("focus", focus);
-      return () => {
-        alive = false;
-        window.clearInterval(timer);
-        window.removeEventListener("focus", focus);
-      };
-    }, [user?.id, normalizedRole, page]);
+   
     function handleTracking(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setSelectedId(null);
@@ -581,6 +614,20 @@ function Badge({ shipment }: {
             setNotice({ kind: "error", text: "Vui lòng chọn phường/xã giao hàng để hệ thống tự phân công Staff." });
             return;
         }
+        if (form.pickupAreaId) {
+            const area = serviceAreas.find((item) => item.id === form.pickupAreaId);
+            if (area && !areaNameMatchesAddress(form.pickupAddress, area)) {
+                setNotice({ kind: "error", text: `Địa chỉ lấy hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                return;
+            }
+        }
+        if (form.deliveryAreaId) {
+            const area = serviceAreas.find((item) => item.id === form.deliveryAreaId);
+            if (area && !areaNameMatchesAddress(form.deliveryAddress, area)) {
+                setNotice({ kind: "error", text: `Địa chỉ giao hàng phải thuộc cùng khu vực phường/xã đã chọn (${area.name}). Vui lòng ghi rõ tên phường/xã trong địa chỉ.` });
+                return;
+            }
+        }
         if (form.pickupLatitude == null || form.pickupLongitude == null ||
             form.deliveryLatitude == null || form.deliveryLongitude == null) {
             setNotice({ kind: "error", text: "Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá." });
@@ -610,12 +657,14 @@ function Badge({ shipment }: {
       staff: "Công việc giao nhận",
       warehouse: "Quản lý kho và trung chuyển",
       incidents: "Quản lý sự cố và khiếu nại",
+      "my-complaints": "Khiếu nại của tôi",
       reports: "Báo cáo hoạt động",
       pricing: "Cấu hình bảng giá",
       "pricing-services": "Bảng giá & Dịch vụ",
       support: "Trung tâm hỗ trợ & Chính sách",
       dispatch: "Điều phối giao nhận",
       routes: "Quản lý tuyến giao hàng",
+      areas: "Quản lý khu vực",
       settlements: "Đối soát COD",
       account: "Tài khoản của tôi",
       "payment-result": "Kết quả thanh toán VNPay",
@@ -931,7 +980,14 @@ function Badge({ shipment }: {
                     <select value={form.pickupAreaId ?? ""} disabled={!user || areasLoading || !!areasError}
                       onChange={(event) => update("pickupAreaId", event.target.value ? Number(event.target.value) : undefined)}>
                       <option value="">Chọn khu vực lấy hàng</option>
-                      {serviceAreas.map((area) => <option key={area.id} value={area.id}>{area.name} ({area.code})</option>)}
+                      {serviceAreas
+                        .filter((area) => area.isActive !== false || area.id === form.pickupAreaId)
+                        .map((area) => (
+                          <option key={area.id} value={area.id}>
+                            {area.name} ({area.code}) - {area.type === "ward" ? "Phường" : area.type === "commune" ? "Xã" : "Đặc khu"}
+                            {area.isActive === false ? " (Ngừng hoạt động)" : ""}
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <label>
@@ -939,13 +995,20 @@ function Badge({ shipment }: {
                     <select required={!!user} value={form.deliveryAreaId ?? ""} disabled={!user || areasLoading || !!areasError}
                       onChange={(event) => update("deliveryAreaId", event.target.value ? Number(event.target.value) : undefined)}>
                       <option value="">{areasLoading ? "Đang tải khu vực…" : "Chọn khu vực giao hàng"}</option>
-                      {serviceAreas.map((area) => <option key={area.id} value={area.id}>{area.name} ({area.code})</option>)}
+                      {serviceAreas
+                        .filter((area) => area.isActive !== false || area.id === form.deliveryAreaId)
+                        .map((area) => (
+                          <option key={area.id} value={area.id}>
+                            {area.name} ({area.code}) - {area.type === "ward" ? "Phường" : area.type === "commune" ? "Xã" : "Đặc khu"}
+                            {area.isActive === false ? " (Ngừng hoạt động)" : ""}
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <p className="muted full">
                     {areasError || (!user
                       ? "Đăng nhập để chọn phường/xã và kích hoạt tự động phân công Staff."
-                      : "Khu vực giao hàng quyết định Staff tự động được phân công; vị trí bản đồ dùng để xác định địa điểm.")}
+                      : "Ghi rõ phường/xã trong mỗi địa chỉ (ví dụ: 123 Đường ABC, Phường Hòa Hưng, TP.HCM) và chọn đúng khu vực tương ứng. Phường lấy hàng có thể khác phường giao hàng. Khu vực giao hàng quyết định Staff phụ trách.")}
                   </p>
 
                   <div className="full">
@@ -1124,11 +1187,11 @@ function Badge({ shipment }: {
                   </div>
                 </div>
               </fieldset>
-              </form>) : page === "staff" ? (<StaffSprint2 />) : page === "warehouse" ? (<WarehousePage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
+              </form>) : page === "staff" ? (<StaffSprint2 />) : page === "my-complaints" ? (<MyComplaints />) : page === "warehouse" ? (<WarehousePage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
             }}/>) : page === "incidents" ? (<IncidentManagement />) : page === "reports" ? (<ReportsPage />) : page === "pricing" ? (<PricingPage />) : page === "pricing-services" ? (<PricingServicesPage onNavigate={navigate} />) : page === "support" ? (<PolicyFAQPage />) : page === "dispatch" ? (<DispatchPage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
-            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
+            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
               <section className="panel"><h2>Tài khoản</h2><p>Thông tin tài khoản: {user?.name ?? "Khách"}</p></section>
             ) : (<section className="panel">
               <div className="panel-heading">
@@ -1221,7 +1284,7 @@ function Badge({ shipment }: {
 
               <ol className="timeline">
                 {selected.events.map((event, index) => (<li key={`${event.at}-${index}`}>
-                    <strong>{STATUS[event.status]}</strong>
+                    <strong>{EVENT_STATUS[event.status] || event.status}</strong>
                     <time>{new Date(event.at).toLocaleString("vi-VN")}</time>
                     {event.note && <p>{event.note}</p>}
                   </li>))}
@@ -1236,12 +1299,24 @@ function Badge({ shipment }: {
             </section>)}
     </>);
     const operationsSection: OperationsSection =
-      page === "settlements" ? "settlements" : page === "routes" ? "routes" : "orders";
+      page === "dashboard" ? "dashboard" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
     if (normalizedRole === "operations") {
       return (
         <OperationsLayout
           section={operationsSection}
-          onSectionChange={(section) => navigate(section === "orders" ? "shipments" : section === "routes" ? "routes" : "settlements")}
+          onSectionChange={(section) =>
+            navigate(
+              section === "dashboard"
+                ? "dashboard"
+                : section === "orders"
+                ? "shipments"
+                : section === "routes"
+                ? "routes"
+                : section === "areas"
+                ? "areas"
+                : "settlements"
+            )
+          }
           userName={user?.name ?? "Operations"}
           signingOut={signingOut}
           onLogout={() => { void handleLogout(); }}
@@ -1254,7 +1329,9 @@ function Badge({ shipment }: {
                 aria-current={page === "dispatch" ? "page" : undefined}>Phân công / Điều phối</button>
             </div>
           )}
-          {renderContent}
+           {page === "dashboard" && normalizedRole === "operations"
+            ? <OperationsDashboard />
+            : renderContent}
         </OperationsLayout>
       );
     }
@@ -1293,6 +1370,7 @@ function Badge({ shipment }: {
               ["home", "⌂", "Trang chủ"],
               ["dashboard", "◫", "Tổng quan"],
               ["shipments", "▤", "Đơn hàng"],
+              ["my-complaints", "✉", "Khiếu nại của tôi"],
               ["create", "+", user ? "Tạo đơn mới" : "Tạo đơn nhanh"],
               ["staff", "↗", "Việc giao nhận"],
               ["warehouse", "▣", "Kho & trung chuyển"],

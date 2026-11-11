@@ -707,3 +707,64 @@ label { display: grid; gap: 9px; font-size: 12px; font-weight: 500; }
 .stat[onClick]{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
 .stat[onClick]:hover{transform:translateY(-2px);border-color:#b8cbbd;box-shadow:0 10px 30px #173f3110}
 .guest-order-note{padding:14px 16px;border-radius:10px;background:#f4f7e8;color:#4c5f52;font-size:12px;line-height:1.7;margin-bottom:18px}
+
+/* ===== Khiếu nại / sự cố: lịch sử xử lý, tab nguồn, phân loại ===== */
+.badge.incident-pending {
+  background: #fff2d8;
+  color: #865e13;
+}
+
+.badge.incident-processing {
+  background: #eaf1fa;
+  color: #3c5c85;
+}
+
+.complaint-timeline {
+  list-style: none;
+  padding-left: 12px;
+  margin: 12px 0;
+  border-left: 2px solid #d0d5dd;
+}
+
+.complaint-timeline li {
+  margin: 0 0 12px 8px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.complaint-timeline li span {
+  color: #738373;
+}
+
+.complaint-timeline p {
+  margin: 4px 0 0;
+  color: #475467;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.complaint-source-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.complaint-source-tabs button.selected {
+  background: #174c37;
+  border-color: #174c37;
+  color: white;
+}
+
+.complaint-source-tabs button.selected:hover:not(:disabled) {
+  background: #236247;
+}
+
+.complaint-category {
+  margin: 16px 0;
+}
+
+.complaint-history-toggle {
+  margin-top: 12px;
+  font-size: 11px;
+}

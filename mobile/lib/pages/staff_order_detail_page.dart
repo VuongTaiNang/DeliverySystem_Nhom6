@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../services/staff_api_service.dart';
+import '../services/geofence_service.dart';
+import 'staff_incident_page.dart';
+import 'staff_location_page.dart';
 
 class StaffOrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -12,6 +17,8 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
   static const _green = Color(0xFF123F31);
   bool _busy = false;
   String? _error;
+  String? _geofenceStatus;
+  GeofenceService? _geofenceService;
   static const _actions = <String, List<List<String>>>{
     'assigned': [['accept', 'Nhận đơn'], ['reject', 'Từ chối']],
     'accepted': [['start-pickup', 'Bắt đầu lấy hàng']],
@@ -31,10 +38,117 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
     'picking_up': 'Đang lấy hàng', 'picked_up': 'Đã lấy hàng',
     'delivering': 'Đang giao hàng', 'delivered': 'Đã giao hàng',
     'return_pending': 'Chờ hoàn hàng', 'returning': 'Đang hoàn hàng',
-    'returned': 'Đã hoàn hàng',
+    'returned': 'Đã hoàn hàng', 'rejected': 'Đã từ chối',
   };
 
   String _field(String name) => (widget.order[name] ?? '').toString();
+  static const int _highValueThreshold = 5000000;
+
+  num get _declaredValue {
+    final value = widget.order['declaredValue'];
+    return value is num ? value : num.tryParse('$value') ?? 0;
+  }
+
+  bool get _isHighValue => _declaredValue >= _highValueThreshold;
+
+  int? get _assignmentId {
+    final value = widget.order['assignmentId'];
+    return value is num ? value.toInt() : int.tryParse('$value');
+  }
+
+  Future<void> _openLocationSharing() async {
+    final id = _assignmentId;
+    if (id == null || id <= 0) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => StaffLocationPage(initialAssignmentId: id),
+    ));
+  }
+
+  Future<void> _showHighValueAlert() async {
+    if (!mounted) return;
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Đơn hàng giá trị cao'),
+        content: Text(
+          'Giá trị khai báo: ${_declaredValue.toStringAsFixed(0)} đ. '
+          'Bạn nên bật chia sẻ GPS để Operations theo dõi đơn hàng. '
+          'Vị trí chỉ được gửi trong lúc bạn chủ động chia sẻ.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Để sau')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Đến màn hình bật GPS')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (enable == true) await _openLocationSharing();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startGeofence());
+  }
+
+  double? _coordinate(String key) {
+    final value = widget.order[key];
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  void _startGeofence() {
+    final shipmentStatus = _field('shipmentStatus').trim().toLowerCase();
+    final GeofenceStage? stage = switch (shipmentStatus) {
+      'picking_up' => GeofenceStage.pickup,
+      'delivering' => GeofenceStage.delivery,
+      _ => null,
+    };
+    if (stage == null) return;
+
+    final latitude = _coordinate(
+      stage == GeofenceStage.pickup ? 'pickupLatitude' : 'deliveryLatitude',
+    );
+    final longitude = _coordinate(
+      stage == GeofenceStage.pickup ? 'pickupLongitude' : 'deliveryLongitude',
+    );
+    if (latitude == null || longitude == null ||
+        !latitude.isFinite || !longitude.isFinite ||
+        latitude.abs() > 90 || longitude.abs() > 180 ||
+        (latitude == 0 && longitude == 0)) {
+      setState(() => _geofenceStatus =
+          'Shipment chưa có tọa độ hợp lệ cho ${stage == GeofenceStage.pickup ? 'điểm lấy hàng' : 'điểm giao hàng'}.');
+      return;
+    }
+
+    final rawId = widget.order['assignmentId'];
+    final assignmentId = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+    if (assignmentId == null || assignmentId <= 0) {
+      setState(() => _geofenceStatus = 'Không tìm thấy mã phân công để bật Geofence.');
+      return;
+    }
+
+    final service = _geofenceService ?? GeofenceService();
+    _geofenceService = service;
+    service.start(
+      assignmentId: assignmentId,
+      target: GeofenceTarget(
+        stage: stage,
+        latitude: latitude,
+        longitude: longitude,
+      ),
+      onStatus: (message) {
+        if (mounted) setState(() => _geofenceStatus = message);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    unawaited(_geofenceService?.stop() ?? Future<void>.value());
+    super.dispose();
+  }
 
   Future<String?> _askReason() async {
     final controller = TextEditingController();
@@ -61,10 +175,59 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
         )),
       );
     } finally {
-      // Let the dialog's closing animation finish before disposing its controller.
+      // Chờ hiệu ứng đóng hộp thoại hoàn tất rồi mới giải phóng bộ điều khiển.
       await Future<void>.delayed(const Duration(milliseconds: 250));
       controller.dispose();
     }
+  }
+
+  /// Cập nhật UI từ kết quả API, không tự đóng màn hình khi đổi trạng thái.
+  /// Một số endpoint chỉ trả shipment hoặc assignment nên cần trạng thái
+  /// dự phòng tương ứng với action đã được backend chấp nhận.
+  void _applyTransition(String action, Map<String, dynamic> result) {
+    const shipmentByAction = <String, String>{
+      'start-pickup': 'picking_up',
+      'pickup-success': 'picked_up',
+      'pickup-failed': 'pickup_failed',
+      'start-delivery': 'delivering',
+      'delivery-success': 'delivered',
+      'delivery-failed': 'delivery_failed',
+      'start-return': 'returning',
+      'return-complete': 'returned',
+    };
+    const assignmentByAction = <String, String>{
+      'accept': 'accepted',
+      'reject': 'rejected',
+      'start-pickup': 'in_progress',
+      'pickup-success': 'in_progress',
+      'pickup-failed': 'accepted',
+      'start-delivery': 'in_progress',
+      'delivery-success': 'completed',
+      'delivery-failed': 'in_progress',
+      'start-return': 'in_progress',
+      'return-complete': 'completed',
+    };
+    final shipment = result['shipment'];
+    final assignment = result['assignment'];
+    final backendShipmentStatus =
+        shipment is Map ? shipment['status']?.toString() : null;
+    final backendAssignmentStatus =
+        assignment is Map ? assignment['status']?.toString() : null;
+    final embeddedAssignmentStatus =
+        shipment is Map ? shipment['assignmentStatus']?.toString() : null;
+
+    setState(() {
+      final shipmentStatus = backendShipmentStatus ?? shipmentByAction[action];
+      final assignmentStatus = backendAssignmentStatus ??
+          embeddedAssignmentStatus ?? assignmentByAction[action];
+      if (shipmentStatus != null) {
+        widget.order['shipmentStatus'] = shipmentStatus;
+      }
+      if (assignmentStatus != null) {
+        widget.order['assignmentStatus'] = assignmentStatus;
+      }
+      _geofenceStatus = null;
+    });
   }
 
   Future<void> _act(String action) async {
@@ -79,12 +242,29 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
       final rawId = widget.order['assignmentId'];
       final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
       if (id == null) throw Exception('Thiếu mã phân công của đơn hàng.');
-      await StaffApiService.performPath(action, id, reason: reason);
+      final result = await StaffApiService.performPath(action, id, reason: reason);
       if (!mounted) return;
+
+      _applyTransition(action, result);
+      // Không để Geofence của giai đoạn trước tiếp tục chạy sau khi
+      // shipment đã chuyển sang giai đoạn tiếp theo.
+      await _geofenceService?.stop();
+      if (!mounted) return;
+      if (action == 'start-pickup' || action == 'start-delivery') {
+        _startGeofence();
+      }
+
+      if (action == 'accept' && _isHighValue) {
+        await _showHighValueAlert();
+        if (!mounted) return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cập nhật đơn hàng thành công')),
+        SnackBar(content: Text(result['message']?.toString() ??
+            'Cập nhật đơn hàng thành công')),
       );
-      Navigator.of(context).pop(true);
+      // Giữ màn hình chi tiết để Staff theo dõi trạng thái kế tiếp.
+      // Chỉ quay lại danh sách khi người dùng chủ động nhấn Back.
     } catch (error) {
       if (mounted) setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -92,16 +272,41 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
     }
   }
 
+  Future<void> _openIncidentPage() async {
+    final rawId = widget.order['assignmentId'];
+    final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã phân công đơn hàng.'),
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => StaffIncidentPage(
+          assignmentId: id,
+          shipmentId: _field('shipmentId'),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final shipmentStatus = _field('shipmentStatus').trim().toLowerCase();
     final assignmentStatus = _field('assignmentStatus').trim().toLowerCase();
-    // Use shipment status for actions; fallback while shipment is pending_pickup.
-    final status = shipmentStatus == 'pending_pickup' &&
-        (assignmentStatus == 'assigned' || assignmentStatus == 'accepted')
-          ? assignmentStatus
-          : _actions.containsKey(shipmentStatus) || _labels.containsKey(shipmentStatus)
-              ? shipmentStatus : assignmentStatus;
+    // Ưu tiên dùng trạng thái Shipment để xác định thao tác; dùng trạng thái phân công dự phòng khi Shipment còn chờ lấy hàng.
+    final status = assignmentStatus == 'rejected'
+        ? 'rejected'
+        : shipmentStatus == 'pending_pickup' &&
+            (assignmentStatus == 'assigned' || assignmentStatus == 'accepted')
+            ? assignmentStatus
+            : _actions.containsKey(shipmentStatus) || _labels.containsKey(shipmentStatus)
+                ? shipmentStatus : assignmentStatus;
     final allActions = _actions[status] ?? const <List<String>>[];
     final available = allActions.where((button) {
       final a = StaffAssignment.fromJson(widget.order);
@@ -133,9 +338,45 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
             Text('${_field('recipientName')} • ${_field('recipientPhone')}'),
             const Divider(height: 28),
             Text('COD: ${widget.order['codAmount'] ?? 0} đ'),
+            Text('Giá trị khai báo: ${_declaredValue.toStringAsFixed(0)} đ'),
             if (_field('notes').isNotEmpty) Text('Ghi chú: ${_field('notes')}'),
           ]),
         )),
+        if (_isHighValue &&
+            !['assigned', 'rejected', 'completed', 'cancelled'].contains(assignmentStatus) &&
+            !['delivered', 'returned'].contains(shipmentStatus)) Card(
+          color: const Color(0xFFFFF3DF),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.shield_outlined, color: Color(0xFF9B5900)),
+                SizedBox(width: 8),
+                Expanded(child: Text('Đơn hàng giá trị cao – đề nghị bật GPS',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
+              ]),
+              const SizedBox(height: 8),
+              const Text('Bật chia sẻ vị trí khi thực hiện nhiệm vụ để Operations hỗ trợ giám sát. Bạn có thể tự dừng chia sẻ.'),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _openLocationSharing,
+                icon: const Icon(Icons.my_location),
+                label: const Text('Đến màn hình bật GPS'),
+              ),
+            ]),
+          ),
+        ),
+        if (_geofenceStatus != null) Card(
+          color: const Color(0xFFEAF3EF),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.my_location, color: _green),
+              const SizedBox(width: 10),
+              Expanded(child: Text(_geofenceStatus!)),
+            ]),
+          ),
+        ),
         if (_error != null) Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Text(_error!, style: const TextStyle(color: Colors.red)),
@@ -154,10 +395,27 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
             child: Text(action[1]),
           )),
         )),
-        if (available.isEmpty) const Padding(
-          padding: EdgeInsets.only(top: 14),
-          child: Text('Không có thao tác dành cho trạng thái hiện tại.'),
+        if (available.isEmpty) Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Text(
+            ['delivered', 'returned', 'rejected'].contains(status)
+                ? 'Nhiệm vụ đã kết thúc. Nhấn Back để quay lại danh sách.'
+                : 'Không có thao tác dành cho trạng thái hiện tại.',
+          ),
         ),
+        if (!['delivered', 'returned', 'rejected'].contains(status)) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.report_problem_outlined),
+            label: const Text('Báo cáo sự cố'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              minimumSize: const Size(double.infinity, 54),
+              side: BorderSide(color: Colors.red.shade700),
+            ),
+            onPressed: _busy ? null : _openIncidentPage,
+          ),
+        ],
       ]),
     );
   }

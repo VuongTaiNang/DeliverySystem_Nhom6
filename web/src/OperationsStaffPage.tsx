@@ -257,7 +257,20 @@ export default function OperationsStaffPage() {
                       </select>
                     </td>
                     <td>{formatVietnamDateTime(staff.createdAt)}</td>
-                    <td><button type="button" onClick={() => openEdit(staff)}>Sửa</button></td>
+                    <td>
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        <button type="button" onClick={() => openEdit(staff)}>Sửa</button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          style={{ fontSize: "12px", whiteSpace: "nowrap" }}
+                          onClick={() => window.location.assign(`/operations/areas?tab=staff&staffId=${staff.id}`)}
+                          title="Phân các khu vực phụ trách cho nhân viên này"
+                        >
+                          Phân KV
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

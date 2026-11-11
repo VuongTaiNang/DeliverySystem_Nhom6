@@ -26,8 +26,13 @@ class _StaffOrdersPageState extends State<StaffOrdersPage> {
 
   @override
   void initState() { super.initState(); _reload(); }
-  void _reload() { setState(() => _future = StaffApiService.getStaffAssignments().then(
-      (rows) => rows.map((a) => a.toJson()).toList())); }
+  void _reload() {
+    final next = StaffApiService.getStaffAssignments()
+        .then((rows) => rows.map((a) => a.toJson()).toList());
+    setState(() {
+      _future = next;
+    });
+  }
   Future<void> _refresh() async {
     _reload();
     try { await _future; } catch (_) { /* FutureBuilder displays the error. */ }

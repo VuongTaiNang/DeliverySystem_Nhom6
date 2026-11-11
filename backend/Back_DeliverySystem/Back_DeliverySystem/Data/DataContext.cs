@@ -10,9 +10,10 @@ public class AppDbContext : DbContext
         : base(options)
     {
     }
-
+    public DbSet<ComplaintHistory> ComplaintHistories => Set<ComplaintHistory>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Staff> Staffs => Set<Staff>();
+    public DbSet<StaffLocation> StaffLocations => Set<StaffLocation>();
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<StaffArea> StaffAreas => Set<StaffArea>();
 
@@ -68,6 +69,22 @@ public class AppDbContext : DbContext
                 .WithOne()
                 .HasForeignKey<Staff>(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Mỗi Staff chỉ lưu một vị trí gần nhất. Lịch sử ShipmentEvent thuộc
+        // Issue Geofencing; Issue #21 chỉ cần vị trí mới nhất cho Operations.
+        modelBuilder.Entity<StaffLocation>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ShipmentId).HasMaxLength(50).IsRequired();
+            entity.HasIndex(x => x.StaffId).IsUnique();
+            entity.HasIndex(x => x.UpdatedAt);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.StaffId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<DeliveryAssignment>().WithMany().HasForeignKey(x => x.AssignmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Shipment>().WithMany().HasForeignKey(x => x.ShipmentId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // =========================================================
@@ -467,6 +484,28 @@ public class AppDbContext : DbContext
                 .HasForeignKey(x => x.ShipmentId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-       
+
+        
+        modelBuilder.Entity<Complaint>(e =>
+        {
+            e.Property(x => x.Source).HasMaxLength(20).IsRequired().HasDefaultValue("customer");
+            e.Property(x => x.Category).HasMaxLength(50);
+            e.HasIndex(x => new { x.Source, x.Status });
+            e.HasMany(x => x.History)
+                .WithOne(h => h.Complaint)
+                .HasForeignKey(h => h.ComplaintId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ComplaintHistory>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Action).HasMaxLength(30).IsRequired();
+            e.Property(x => x.FromStatus).HasMaxLength(30);
+            e.Property(x => x.ToStatus).HasMaxLength(30);
+            e.Property(x => x.Note).HasMaxLength(1000);
+            e.Property(x => x.ActorRole).HasMaxLength(20).IsRequired();
+            e.HasIndex(x => x.ComplaintId);
+        });
     }
 }

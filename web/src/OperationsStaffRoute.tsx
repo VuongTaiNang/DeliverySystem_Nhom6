@@ -34,9 +34,12 @@ export default function OperationsStaffRoute() {
 
   function navigate(section: OperationsSection) {
     const path: Record<OperationsSection, string> = {
+      dashboard: "/dashboard",
       orders: "/dispatch",
       routes: "/operations/routes",
+      areas: "/operations/areas",
       staff: "/operations/staff-management",
+      tracking: "/operations/staff-tracking",
       incidents: "/incidents",
       settlements: "/settlements",
     };

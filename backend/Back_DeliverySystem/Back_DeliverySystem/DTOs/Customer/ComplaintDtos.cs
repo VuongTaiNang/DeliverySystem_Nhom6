@@ -42,3 +42,10 @@ public class UpdateComplaintRequest
     )]
     public string? Response { get; set; }
 }
+
+public class ClassifyComplaintRequest
+{
+    [Required(ErrorMessage = "Phân loại không được để trống.")]
+    [StringLength(50)]
+    public string Category { get; set; } = string.Empty;
+}
