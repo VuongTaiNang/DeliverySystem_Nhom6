@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   api,
@@ -16,6 +16,21 @@ import { formatVietnamDateTime } from "./lib/dateTime";
 
 type IncidentSource = "" | "customer" | "staff";
 
+async function withRequestTimeout<T>(request: Promise<T>, milliseconds = 12000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Tải danh sách quá thời gian cho phép. Hãy kiểm tra Backend rồi thử lại.")),
+      milliseconds,
+    );
+  });
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 export default function IncidentManagement() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [filter, setFilter] = useState<IncidentStatus | "">("");
@@ -26,6 +41,8 @@ export default function IncidentManagement() {
   const [loadError, setLoadError] = useState("");
   const [success, setSuccess] = useState("");
   const [reload, setReload] = useState(0);
+  const selectedIdRef = useRef<number | null>(null);
+  selectedIdRef.current = selectedId;
 
   useEffect(() => {
     if (!success) return;
@@ -41,7 +58,7 @@ export default function IncidentManagement() {
       setLoadError("");
 
       try {
-        const data = await api.listAllIncidents(source || undefined);
+        const data = await withRequestTimeout(api.listAllIncidents(source || undefined));
         if (active) setIncidents(data);
       } catch (error) {
         if (active) {
@@ -59,7 +76,7 @@ export default function IncidentManagement() {
     void load(true);
 
     const timer = window.setInterval(() => {
-      if (document.visibilityState !== "hidden" && selectedId === null) {
+      if (document.visibilityState !== "hidden" && selectedIdRef.current === null) {
         void load(false);
       }
     }, 12000);
@@ -68,7 +85,7 @@ export default function IncidentManagement() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [reload, selectedId, source]);
+  }, [reload, source]);
 
   const term = search.trim().toLocaleLowerCase("vi");
 
@@ -103,7 +120,7 @@ export default function IncidentManagement() {
 
           <button
             type="button"
-            disabled={loading || Boolean(selected)}
+            disabled={loading}
             onClick={() => setReload((current) => current + 1)}
           >
             {loading ? "Đang tải…" : "Tải lại"}
