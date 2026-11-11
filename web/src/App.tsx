@@ -1197,6 +1197,11 @@ function Badge({ shipment }: {
                       <option value="recipient">Người nhận trả</option>
                       <option value="deduct_cod">Khấu trừ COD</option>
                     </select>
+                    {form.feePayer === "shop_prepaid" && (
+                      <small className="muted">
+                        Sau khi tạo đơn, Shop mở chi tiết đơn để chọn thanh toán qua VNPay hoặc đăng ký nộp tiền mặt. Đơn chỉ được phân công khi phí đã được xác nhận.
+                      </small>
+                    )}
                   </label>
 
                   <label className="full">
