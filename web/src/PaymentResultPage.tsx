@@ -9,7 +9,7 @@ type PaymentDetails = {
   amount: number;
   status: string;
   method?: string;
-  transactionReference?: string;
+  transactionReference?: string | null;
   paidAt?: string | null;
 };
 
