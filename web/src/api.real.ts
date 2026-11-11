@@ -670,17 +670,27 @@ async assignShipment(shipmentId: string, input: AssignmentInput): Promise<Shipme
 async getSettlementData(): Promise<SettlementData> {
     return request<SettlementData>("/settlements");
 },
+// POST responses are wrapped by the Backend as { message, settlement }.
+// GET /settlements returns the bare settlement objects in its list.
 async createSettlement(input: CreateSettlementInput): Promise<Settlement> {
-    return request<Settlement>("/settlements", {
+    const response = await request<{ message: string; settlement: Settlement }>("/settlements", {
         method: "POST",
         body: JSON.stringify(input),
     });
+    if (!response?.settlement || !Array.isArray(response.settlement.lines)) {
+        throw new Error("Kỳ đối soát có thể đã được lưu. Hãy tải lại Lịch sử đối soát trước khi thử lại.");
+    }
+    return response.settlement;
 },
 async completeSettlement(settlementId: string, paymentReference: string): Promise<Settlement> {
-    return request<Settlement>(`/settlements/${encodeURIComponent(settlementId)}/complete`, {
+    const response = await request<{ message: string; settlement: Settlement }>(`/settlements/${encodeURIComponent(settlementId)}/complete`, {
         method: "POST",
         body: JSON.stringify({ paymentReference }),
     });
+    if (!response?.settlement || !Array.isArray(response.settlement.lines)) {
+        throw new Error("Kỳ đối soát có thể đã được hoàn tất. Hãy tải lại Lịch sử đối soát trước khi thử lại.");
+    }
+    return response.settlement;
 },
 
 async getAccount(): Promise<AccountInfo> {
