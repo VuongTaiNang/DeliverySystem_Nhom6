@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { listStaffTracking } from "./operationsStaffTrackingApi";
-import type { StaffTrackingItem } from "./operationsStaffTrackingApi";
+import { listRecentCompletedStaffDeliveries, listStaffTracking } from "./operationsStaffTrackingApi";
+import type { CompletedStaffDelivery, StaffTrackingItem } from "./operationsStaffTrackingApi";
 import { formatVietnamDateTime } from "./lib/dateTime";
 import "./OperationsStaffTrackingPage.css";
 
@@ -37,15 +37,131 @@ function TrackingMap({ items, selectedId }: { items: StaffTrackingItem[]; select
 }
 
 export default function OperationsStaffTrackingPage() {
-  const [items, setItems] = useState<StaffTrackingItem[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [selectedId, setSelectedId] = useState<number | null>(null);
-  async function load() { setLoading(true); setError(""); try { const data = await listStaffTracking(); setItems(data); setSelectedId(current => current && data.some(x => x.staffId === current) ? current : data[0]?.staffId ?? null); } catch (e) { setError(e instanceof Error ? e.message : "Không tải được vị trí Staff."); } finally { setLoading(false); } }
-  useEffect(() => { void load(); const timer = window.setInterval(() => void load(), 30000); return () => window.clearInterval(timer); }, []);
-  return <div className="staff-tracking-page">
-    <section className="panel staff-tracking-hero"><div><p className="eyebrow">OPERATIONS · THEO DÕI GPS</p><h2>Vị trí Staff và ETA</h2><p className="muted">Dữ liệu chỉ xuất hiện khi Staff chủ động chia sẻ vị trí cho nhiệm vụ đã nhận. Tự làm mới mỗi 30 giây.</p></div><button type="button" onClick={() => void load()} disabled={loading}>{loading ? "Đang tải…" : "Làm mới"}</button></section>
-    {error && <div className="notice error" role="alert">{error}</div>}
-    {loading && !items.length ? <p role="status">Đang tải vị trí Staff…</p> : items.length === 0 ? <section className="panel empty"><h3>Chưa có vị trí được chia sẻ</h3><p>Staff cần nhận nhiệm vụ và chủ động bật chia sẻ vị trí trên Mobile.</p></section> : <div className="staff-tracking-grid">
-      <section className="panel"><TrackingMap items={items} selectedId={selectedId} /><p className="staff-tracking-legend"><span>●</span> Staff · <i>●</i> Điểm lấy/giao · đường nét đứt là khoảng cách đường chim bay</p></section>
-      <section className="staff-tracking-list" aria-label="Danh sách Staff đang theo dõi">{items.map(item => <button type="button" className={`staff-tracking-card ${selectedId === item.staffId ? "selected" : ""}`} key={item.staffId} onClick={() => setSelectedId(item.staffId)}><div><strong>{text(item)}</strong><span>{item.shipmentId} · {item.targetType === "pickup" ? "Đang đến điểm lấy" : "Đang đến điểm giao"}</span></div><dl><div><dt>Khoảng cách</dt><dd>{item.distanceKm == null ? "Chưa có tọa độ" : `${item.distanceKm} km`}</dd></div><div><dt>ETA</dt><dd>{item.etaMinutes == null ? "—" : `${item.etaMinutes} phút`}</dd></div></dl><p>{item.targetAddress}</p><small className={item.isStale ? "stale" : ""}>{item.isStale ? "Vị trí cũ" : "Cập nhật"}: {formatVietnamDateTime(item.updatedAt)}{item.accuracyMeters != null ? ` · ±${Math.round(item.accuracyMeters)} m` : ""}</small>{item.etaAssumption && <small>{item.etaAssumption}</small>}</button>)}</section>
-    </div>}
-  </div>;
+  const [items, setItems] = useState<StaffTrackingItem[]>([]);
+  const [completed, setCompleted] = useState<CompletedStaffDelivery[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const [live, recent] = await Promise.all([
+        listStaffTracking(),
+        listRecentCompletedStaffDeliveries(),
+      ]);
+      setItems(live);
+      setCompleted(recent);
+      setSelectedId((current) =>
+        current != null && live.some((item) => item.staffId === current)
+          ? current
+          : live[0]?.staffId ?? null
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Không tải được vị trí Staff.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="staff-tracking-page">
+      <section className="panel staff-tracking-hero">
+        <div>
+          <p className="eyebrow">OPERATIONS · THEO DÕI GPS</p>
+          <h2>Vị trí Staff và ETA</h2>
+          <p className="muted">
+            Chỉ hiển thị nhiệm vụ đang hoạt động. Sau khi giao thành công,
+            vị trí được gỡ khỏi bản đồ và lưu lại thời điểm hoàn tất.
+            Tự cập nhật mỗi 30 giây.
+          </p>
+        </div>
+        <button type="button" onClick={() => void load()} disabled={loading}>
+          {loading ? "Đang tải…" : "Làm mới"}
+        </button>
+      </section>
+
+      {error && <div className="notice error" role="alert">{error}</div>}
+
+      {loading && items.length === 0 ? (
+        <p role="status">Đang tải vị trí Staff…</p>
+      ) : items.length === 0 ? (
+        <section className="panel empty staff-tracking-empty">
+          <h3>Không có nhiệm vụ đang được theo dõi GPS</h3>
+          <p>
+            Bản đồ đã được ẩn vì không có nhiệm vụ đang chia sẻ vị trí hợp lệ.
+            Khi Staff nhận nhiệm vụ mới và bật chia sẻ, vị trí sẽ xuất hiện tại đây.
+          </p>
+        </section>
+      ) : (
+        <div className="staff-tracking-grid">
+          <section className="panel">
+            <TrackingMap items={items} selectedId={selectedId} />
+            <p className="staff-tracking-legend">
+              <span>●</span> Staff · <i>●</i> Điểm lấy/giao ·
+              đường nét đứt là khoảng cách đường chim bay
+            </p>
+          </section>
+          <section className="staff-tracking-list" aria-label="Danh sách Staff đang theo dõi">
+            {items.map((item) => (
+              <button
+                type="button"
+                className={`staff-tracking-card ${selectedId === item.staffId ? "selected" : ""}`}
+                key={item.staffId}
+                onClick={() => setSelectedId(item.staffId)}
+              >
+                <div>
+                  <strong>{text(item)}</strong>
+                  <span>{item.shipmentId} · {item.targetType === "pickup"
+                    ? "Đang đến điểm lấy" : "Đang đến điểm giao"}</span>
+                </div>
+                <dl>
+                  <div><dt>Khoảng cách</dt>
+                    <dd>{item.distanceKm == null ? "Chưa có tọa độ" : `${item.distanceKm} km`}</dd>
+                  </div>
+                  <div><dt>ETA</dt>
+                    <dd>{item.etaMinutes == null ? "—" : `${item.etaMinutes} phút`}</dd>
+                  </div>
+                </dl>
+                <p>{item.targetAddress}</p>
+                <small className={item.isStale ? "stale" : ""}>
+                  {item.isStale ? "Vị trí cũ" : "Cập nhật"}: {formatVietnamDateTime(item.updatedAt)}
+                  {item.accuracyMeters != null
+                    ? ` · ±${Math.round(item.accuracyMeters)} m`
+                    : ""}
+                </small>
+                {item.etaAssumption && <small>{item.etaAssumption}</small>}
+              </button>
+            ))}
+          </section>
+        </div>
+      )}
+
+      {completed.length > 0 && (
+        <section className="panel staff-tracking-completed">
+          <h3>Đã giao thành công – Kết thúc theo dõi GPS</h3>
+          <p className="muted">
+            Các nhiệm vụ hoàn tất gần đây (trong 24 giờ). Chỉ lưu mã đơn và
+            thời điểm kết thúc tại đây, không tiếp tục hiển thị tọa độ cũ.
+          </p>
+          <ul>
+            {completed.map((item) => (
+              <li key={item.assignmentId}>
+                <strong>{item.employeeCode} · {item.staffName}</strong>
+                <span>{item.shipmentId}</span>
+                <span>Đã giao thành công lúc {formatVietnamDateTime(item.completedAt)} · Đã kết thúc theo dõi vị trí</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
 }
