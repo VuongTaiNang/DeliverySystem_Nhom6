@@ -55,6 +55,9 @@ class StaffLocationService {
             await _send(assignmentId, position);
             lastPosition = position;
             onPosition(position);
+          } on LocationSharingEndedException catch (error) {
+            await stop();
+            onError(error);
           } catch (error) {
             onError(error);
           }

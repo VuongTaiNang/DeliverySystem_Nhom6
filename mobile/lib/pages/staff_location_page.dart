@@ -7,7 +7,8 @@ import '../services/staff_api_service.dart';
 import '../services/staff_location_service.dart';
 
 class StaffLocationPage extends StatefulWidget {
-  const StaffLocationPage({super.key});
+  final int? initialAssignmentId;
+  const StaffLocationPage({super.key, this.initialAssignmentId});
   @override
   State<StaffLocationPage> createState() => _StaffLocationPageState();
 }
@@ -42,7 +43,9 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
     try {
       final assignments = await StaffApiService.getStaffAssignments();
       final active = assignments
-          .where((item) => item.assignmentStatus == 'accepted')
+          .where((item) =>
+              item.assignmentStatus == 'accepted' ||
+              item.assignmentStatus == 'in_progress')
           .toList();
       if (!mounted) return;
       setState(() {
@@ -50,7 +53,9 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
         _selectedAssignmentId =
             active.any((x) => x.assignmentId == _selectedAssignmentId)
             ? _selectedAssignmentId
-            : (active.isEmpty ? null : active.first.assignmentId);
+            : (active.any((x) => x.assignmentId == widget.initialAssignmentId)
+                ? widget.initialAssignmentId
+                : (active.isEmpty ? null : active.first.assignmentId));
       });
     } catch (error) {
       if (mounted)
@@ -100,6 +105,11 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
   String _coordinate(double? value) =>
       value == null ? '—' : value.toStringAsFixed(6);
 
+  String _shortShipmentId(String id) {
+    if (id.length <= 24) return id;
+    return '${id.substring(0, 13)}…${id.substring(id.length - 7)}';
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -134,6 +144,7 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
             )
           else ...[
             DropdownButtonFormField<int>(
+              isExpanded: true,
               value: _selectedAssignmentId,
               decoration: const InputDecoration(
                 labelText: 'Nhiệm vụ đang thực hiện',
@@ -143,7 +154,13 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
                   .map(
                     (a) => DropdownMenuItem(
                       value: a.assignmentId,
-                      child: Text('${a.shipmentId} · ${a.shipmentStatus}'),
+                      child: Text(
+                        '${_shortShipmentId(a.shipmentId)} · '
+                        '${shipmentStatusLabel[a.shipmentStatus] ?? a.shipmentStatus}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                      ),
                     ),
                   )
                   .toList(),
@@ -151,6 +168,13 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
                   ? null
                   : (value) => setState(() => _selectedAssignmentId = value),
             ),
+            if (_selectedAssignmentId != null) ...[
+              const SizedBox(height: 8),
+              SelectableText(
+                'Mã vận đơn: ${_assignments.firstWhere((a) => a.assignmentId == _selectedAssignmentId).shipmentId}',
+                style: const TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ],
             const SizedBox(height: 18),
             if (_location.isSharing)
               Card(

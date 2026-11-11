@@ -23,6 +23,10 @@ public class OperationsStaffTrackingController : ControllerBase
             join user in _db.Users.AsNoTracking() on staff.UserId equals user.Id
             join assignment in _db.DeliveryAssignments.AsNoTracking() on location.AssignmentId equals assignment.Id
             join shipment in _db.Shipments.AsNoTracking() on location.ShipmentId equals shipment.Id
+            where assignment.IsActive
+                && (assignment.Status == "accepted" || assignment.Status == "in_progress")
+                && shipment.Status != "delivered"
+                && shipment.Status != "returned"
             orderby location.UpdatedAt descending
             select new { location, staff, user, assignment, shipment }
         ).ToListAsync();

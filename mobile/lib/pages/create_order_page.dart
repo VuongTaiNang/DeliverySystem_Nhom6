@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import '../widgets/map_location_picker.dart';
@@ -57,6 +60,128 @@ class _CreateOrderPageState
   Map<String, dynamic>? _quote;
   LatLng? _pickupLocation;
   LatLng? _deliveryLocation;
+  bool _searchingPickup = false;
+  bool _searchingDelivery = false;
+  bool _pickupApproximate = false;
+  bool _deliveryApproximate = false;
+
+  // Nominatim có thể không nhận ra số nhà/hẻm; chỉ dùng tên đường
+  // làm kết quả dự phòng, không coi đó là tọa độ chính xác của số nhà.
+  String? _streetFallback(String address) {
+    final segments = address.split(',');
+    if (segments.length < 2) return null;
+    final street = segments.first.trim().replaceFirst(
+      RegExp(r'^(?:số\s*)?\d+[a-zA-Z]?(?:[/\-]\d+[a-zA-Z]?)*\s*',
+          caseSensitive: false),
+      '',
+    ).trim();
+    if (street.length < 4) return null;
+    final normalized = address.toLowerCase();
+    final city = normalized.contains('hcm') ||
+            normalized.contains('hồ chí minh') ||
+            normalized.contains('sài gòn')
+        ? 'Hồ Chí Minh'
+        : segments.last.trim();
+    if (city.isEmpty) return null;
+    return '$street, $city';
+  }
+
+  Future<void> _locateAddress({required bool pickup}) async {
+    final controller = pickup ? _pickup : _delivery;
+    final address = controller.text.trim();
+    if (address.length < 3) {
+      _show('Vui lòng nhập địa chỉ chi tiết trước khi tìm trên bản đồ.', true);
+      return;
+    }
+    if (pickup ? _searchingPickup : _searchingDelivery) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      if (pickup) { _searchingPickup = true; }
+      else { _searchingDelivery = true; }
+    });
+    try {
+      final fallback = _streetFallback(address);
+      final queries = <String>[
+        address,
+        if (fallback != null && fallback.toLowerCase() != address.toLowerCase())
+          fallback,
+      ];
+      Map<String, dynamic>? result;
+      var approximate = false;
+      for (var index = 0; index < queries.length; index++) {
+        if (index > 0) {
+          // Nominatim: tối đa khoảng một yêu cầu mỗi giây.
+          await Future<void>.delayed(const Duration(milliseconds: 1100));
+        }
+        final uri = Uri.parse(ApiService.baseUrl + '/api/v1/geocoding/search')
+            .replace(queryParameters: {'q': queries[index]});
+        final response = await http.get(uri)
+            .timeout(const Duration(seconds: 15));
+        final dynamic decoded = jsonDecode(response.body);
+        if (response.statusCode == 404 && index < queries.length - 1) {
+          continue;
+        }
+        if (response.statusCode != 200 || decoded is! Map) {
+          final message = decoded is Map ? decoded['message'] : null;
+          throw Exception(message?.toString() ?? 'Không tìm được địa chỉ.');
+        }
+        result = Map<String, dynamic>.from(decoded);
+        approximate = index > 0;
+        break;
+      }
+      if (result == null) throw Exception('Không tìm thấy vị trí.');
+      final latitude = (result['latitude'] as num).toDouble();
+      final longitude = (result['longitude'] as num).toDouble();
+      if (!latitude.isFinite || !longitude.isFinite ||
+          latitude < -90 || latitude > 90 ||
+          longitude < -180 || longitude > 180) {
+        throw Exception('Tọa độ trả về không hợp lệ.');
+      }
+      if (!mounted || controller.text.trim() != address) return;
+      setState(() {
+        if (pickup) {
+          _pickupLocation = LatLng(latitude, longitude);
+          _pickupApproximate = approximate;
+        } else {
+          _deliveryLocation = LatLng(latitude, longitude);
+          _deliveryApproximate = approximate;
+        }
+        _quote = null;
+      });
+      _show(
+        approximate
+            ? 'Chỉ tìm được tên đường, chưa xác định số nhà. Hãy chạm bản đồ để xác nhận ghim chính xác.'
+            : 'Đã tìm thấy địa chỉ. Hãy kiểm tra lại ghim trên bản đồ.',
+        false,
+      );
+    } catch (error) {
+      if (mounted) {
+        _show('Không tìm được địa chỉ: ' +
+            error.toString().replaceFirst('Exception: ', ''), true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (pickup) { _searchingPickup = false; }
+          else { _searchingDelivery = false; }
+        });
+      }
+    }
+  }
+
+  Widget _locateButton({required bool pickup}) {
+    final loading = pickup ? _searchingPickup : _searchingDelivery;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: OutlinedButton.icon(
+        onPressed: (_loading || loading) ? null : () => _locateAddress(pickup: pickup),
+        icon: loading
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.search),
+        label: Text(loading ? 'Đang tìm địa chỉ...' : 'Tìm địa chỉ trên bản đồ'),
+      ),
+    );
+  }
 
   // =========================================================
   // COLORS
@@ -289,6 +414,10 @@ class _CreateOrderPageState
       _show('Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá.', true);
       return;
     }
+    if (_pickupApproximate || _deliveryApproximate) {
+      _show('Vị trí tìm theo tên đường chỉ là gần đúng. Hãy chạm bản đồ để xác nhận ghim trước khi báo giá.', true);
+      return;
+    }
 
     if (!_formKey.currentState!.validate()) {
       _show(
@@ -454,9 +583,9 @@ class _CreateOrderPageState
         onChanged: (_) {
           // Đổi địa chỉ phải chọn lại điểm trên bản đồ, và báo giá cũ hết hiệu lực.
           if (identical(controller, _pickup)) {
-            setState(() => _pickupLocation = null);
+            setState(() { _pickupLocation = null; _pickupApproximate = false; });
           } else if (identical(controller, _delivery)) {
-            setState(() => _deliveryLocation = null);
+            setState(() { _deliveryLocation = null; _deliveryApproximate = false; });
           }
           _invalidateQuote();
         },
@@ -592,13 +721,21 @@ class _CreateOrderPageState
 
             const SizedBox(height: 20),
 
+            _locateButton(pickup: true),
+            const SizedBox(height: 8),
             MapLocationPicker(
+              key: ValueKey('pickup-${_pickupLocation?.latitude}-${_pickupLocation?.longitude}'),
               title: 'Chọn vị trí lấy hàng',
               value: _pickupLocation,
               onChanged: (location) {
                 _invalidateQuote();
-                setState(() => _pickupLocation = location);
+                setState(() { _pickupLocation = location; _pickupApproximate = false; });
               },
+            ),
+            if (_pickupApproximate) const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Vị trí hiện tại chỉ là gần đúng theo tên đường. Hãy chạm bản đồ để xác nhận điểm lấy hàng.',
+                style: TextStyle(color: Color(0xFF9B5900), fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 20),
 
@@ -686,14 +823,22 @@ class _CreateOrderPageState
 
             const SizedBox(height: 20),
 
+            _locateButton(pickup: false),
+            const SizedBox(height: 8),
             MapLocationPicker(
+              key: ValueKey('delivery-${_deliveryLocation?.latitude}-${_deliveryLocation?.longitude}'),
               title: 'Chọn vị trí giao hàng',
               value: _deliveryLocation,
               markerColor: Colors.green,
               onChanged: (location) {
                 _invalidateQuote();
-                setState(() => _deliveryLocation = location);
+                setState(() { _deliveryLocation = location; _deliveryApproximate = false; });
               },
+            ),
+            if (_deliveryApproximate) const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Vị trí hiện tại chỉ là gần đúng theo tên đường. Hãy chạm bản đồ để xác nhận điểm giao hàng.',
+                style: TextStyle(color: Color(0xFF9B5900), fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 20),
 

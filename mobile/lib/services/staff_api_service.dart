@@ -27,6 +27,7 @@ class StaffAssignment {
   final String goods;
   final num weightKg;
   final num codAmount;
+  final num declaredValue;
   final String service;
   final String notes;
 
@@ -48,6 +49,7 @@ class StaffAssignment {
     required this.goods,
     required this.weightKg,
     required this.codAmount,
+    required this.declaredValue,
     required this.service,
     required this.notes,
   });
@@ -70,6 +72,7 @@ class StaffAssignment {
     'goods': goods,
     'weightKg': weightKg,
     'codAmount': codAmount,
+    'declaredValue': declaredValue,
     'service': service,
     'notes': notes,
   };
@@ -100,6 +103,7 @@ class StaffAssignment {
       goods: s('goods'),
       weightKg: n('weightKg'),
       codAmount: n('codAmount'),
+      declaredValue: n('declaredValue'),
       service: s('service'),
       notes: s('notes'),
     );
@@ -162,6 +166,12 @@ const shipmentStatusLabel = <String, String>{
   'returning': 'Đang hoàn hàng',
   'returned': 'Đã hoàn hàng',
 };
+
+/// Nhiệm vụ đã kết thúc hoặc không còn đủ điều kiện nhận cập nhật vị trí.
+class LocationSharingEndedException implements Exception {
+  @override
+  String toString() => 'Nhiệm vụ không còn hoạt động. Đã dừng chia sẻ vị trí.';
+}
 
 class StaffApiService {
   static const int _minReason = 3; // khớp DTO backend
@@ -250,6 +260,9 @@ class StaffApiService {
     final data = _decode(response);
     if (_ok(response))
       return data is Map<String, dynamic> ? data : <String, dynamic>{};
+    if (response.statusCode == 409) {
+      throw LocationSharingEndedException();
+    }
     throw Exception(_message(response, data, 'Không cập nhật được vị trí.'));
   }
 

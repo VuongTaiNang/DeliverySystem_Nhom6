@@ -144,6 +144,9 @@ namespace Back_DeliverySystem.Controllers
                         codAmount =
                             shipment.CodAmount,
 
+                        declaredValue =
+                            shipment.DeclaredValue,
+
                         service =
                             shipment.Service,
 
@@ -846,6 +849,22 @@ namespace Back_DeliverySystem.Controllers
                         : $"{staff.EmployeeCode} giao hàng thành công."
                 }
             );
+
+            // Kết thúc phiên theo dõi vị trí gắn với nhiệm vụ vừa hoàn tất.
+            // Không giữ lại GPS cuối cùng để Operations tiếp tục thấy trên bản đồ.
+            var trackedLocation = await _context.StaffLocations
+                .FirstOrDefaultAsync(x => x.StaffId == staff.Id && x.AssignmentId == assignment.Id);
+            if (trackedLocation != null)
+            {
+                _context.StaffLocations.Remove(trackedLocation);
+                _context.ShipmentEvents.Add(new ShipmentEvent
+                {
+                    ShipmentId = shipment.Id,
+                    Status = "location_tracking_ended",
+                    At = DateTime.UtcNow,
+                    Note = $"{staff.EmployeeCode}: kết thúc chia sẻ vị trí cho đơn hàng sau khi giao thành công."
+                });
+            }
 
             await _context.SaveChangesAsync();
 
