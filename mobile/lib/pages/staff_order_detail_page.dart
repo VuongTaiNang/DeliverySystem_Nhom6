@@ -300,11 +300,13 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
     final shipmentStatus = _field('shipmentStatus').trim().toLowerCase();
     final assignmentStatus = _field('assignmentStatus').trim().toLowerCase();
     // Ưu tiên dùng trạng thái Shipment để xác định thao tác; dùng trạng thái phân công dự phòng khi Shipment còn chờ lấy hàng.
-    final status = shipmentStatus == 'pending_pickup' &&
-        (assignmentStatus == 'assigned' || assignmentStatus == 'accepted')
-          ? assignmentStatus
-          : _actions.containsKey(shipmentStatus) || _labels.containsKey(shipmentStatus)
-              ? shipmentStatus : assignmentStatus;
+    final status = assignmentStatus == 'rejected'
+        ? 'rejected'
+        : shipmentStatus == 'pending_pickup' &&
+            (assignmentStatus == 'assigned' || assignmentStatus == 'accepted')
+            ? assignmentStatus
+            : _actions.containsKey(shipmentStatus) || _labels.containsKey(shipmentStatus)
+                ? shipmentStatus : assignmentStatus;
     final allActions = _actions[status] ?? const <List<String>>[];
     final available = allActions.where((button) {
       final a = StaffAssignment.fromJson(widget.order);
