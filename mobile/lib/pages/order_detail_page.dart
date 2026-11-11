@@ -22,6 +22,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 bool _ratingLoading = false;
 bool _ratingSaving = false;
 bool _ratingExists = false;
+bool _ratingEditing = false;
+Map<String, dynamic>? _ratingData;
 
 int _selectedScore = 5;
 Future<void> _loadRating() async {
@@ -38,6 +40,8 @@ Future<void> _loadRating() async {
 
     setState(() {
       _ratingExists = result != null;
+      _ratingData = result;
+      _ratingEditing = false;
 
       if (result != null) {
         _selectedScore =
@@ -206,38 +210,58 @@ Widget _ratingSection() {
     );
   }
 
-  return _card('ĐÁNH GIÁ DỊCH VỤ', [
-    Text(
-      _ratingExists
-          ? 'Đánh giá hiện tại của bạn'
-          : 'Bạn hài lòng với dịch vụ chứ?',
-    ),
-    const SizedBox(height: 8),
+  if (_ratingExists && !_ratingEditing) {
+    final score = int.tryParse(_ratingData?['score']?.toString() ?? '') ??
+        _selectedScore;
+    final comment = _ratingData?['comment']?.toString().trim() ??
+        _commentController.text.trim();
+    return _card('ĐÁNH GIÁ DỊCH VỤ', [
+      const Text('Đã gửi đánh giá của bạn',
+          style: TextStyle(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 10),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(
+          5,
+          (index) => Icon(
+            index < score ? Icons.star : Icons.star_border,
+            color: Colors.amber.shade700,
+            size: 32,
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      Text(comment.isEmpty ? 'Không có nhận xét.' : comment),
+      const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: () => setState(() => _ratingEditing = true),
+        icon: const Icon(Icons.edit_outlined),
+        label: const Text('Chỉnh sửa đánh giá'),
+      ),
+    ]);
+  }
 
+  return _card('ĐÁNH GIÁ DỊCH VỤ', [
+    Text(_ratingExists
+        ? 'Chỉnh sửa đánh giá của bạn'
+        : 'Bạn hài lòng với dịch vụ chứ?'),
+    const SizedBox(height: 8),
     Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(5, (index) {
         final score = index + 1;
-
         return IconButton(
           onPressed: _ratingSaving
               ? null
-              : () {
-                  setState(() {
-                    _selectedScore = score;
-                  });
-                },
+              : () => setState(() => _selectedScore = score),
           icon: Icon(
-            score <= _selectedScore
-                ? Icons.star
-                : Icons.star_border,
+            score <= _selectedScore ? Icons.star : Icons.star_border,
             color: Colors.amber.shade700,
             size: 34,
           ),
         );
       }),
     ),
-
     TextField(
       controller: _commentController,
       enabled: !_ratingSaving,
@@ -250,9 +274,7 @@ Widget _ratingSection() {
         alignLabelWithHint: true,
       ),
     ),
-
     const SizedBox(height: 12),
-
     SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -267,17 +289,26 @@ Widget _ratingSection() {
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
+                    strokeWidth: 2, color: Colors.white),
               )
-            : Text(
-                _ratingExists
-                    ? 'CẬP NHẬT ĐÁNH GIÁ'
-                    : 'GỬI ĐÁNH GIÁ',
-              ),
+            : Text(_ratingExists ? 'LƯU ĐÁNH GIÁ' : 'GỬI ĐÁNH GIÁ'),
       ),
     ),
+    if (_ratingExists)
+      TextButton(
+        onPressed: _ratingSaving
+            ? null
+            : () {
+                setState(() {
+                  _ratingEditing = false;
+                  _selectedScore =
+                      int.tryParse(_ratingData?['score']?.toString() ?? '') ?? 5;
+                  _commentController.text =
+                      _ratingData?['comment']?.toString() ?? '';
+                });
+              },
+        child: const Text('Hủy chỉnh sửa'),
+      ),
   ]);
 }
 
@@ -296,32 +327,40 @@ Future<void> _submitRating() async {
   });
 
   try {
-    if (_ratingExists) {
-      await ApiService.updateRating(
-        shipmentId: widget.shipmentId,
-        rating: _selectedScore,
-        comment: _commentController.text,
-      );
-    } else {
-      await ApiService.createRating(
-        shipmentId: widget.shipmentId,
-        rating: _selectedScore,
-        comment: _commentController.text,
-      );
-    }
-
+    final wasUpdating = _ratingExists;
+    final result = wasUpdating
+        ? await ApiService.updateRating(
+            shipmentId: widget.shipmentId,
+            rating: _selectedScore,
+            comment: _commentController.text,
+          )
+        : await ApiService.createRating(
+            shipmentId: widget.shipmentId,
+            rating: _selectedScore,
+            comment: _commentController.text,
+          );
     if (!mounted) return;
+
+    final received = result['rating'];
+    setState(() {
+      _ratingExists = true;
+      _ratingEditing = false;
+      _ratingData = received is Map
+          ? Map<String, dynamic>.from(received)
+          : {
+              'score': _selectedScore,
+              'comment': _commentController.text.trim(),
+            };
+    });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          _ratingExists
-              ? 'Cập nhật đánh giá thành công!'
-              : 'Gửi đánh giá thành công!',
-        ),
+        content: Text(wasUpdating
+            ? 'Cập nhật đánh giá thành công!'
+            : 'Gửi đánh giá thành công!'),
       ),
     );
-
+    // Đồng bộ bản ghi vừa lưu, tránh hiển thị lại form sau khi gửi.
     await _loadRating();
   } catch (e) {
     if (!mounted) return;
