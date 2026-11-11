@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using Back_DeliverySystem.DTOs.Staff;
+using Back_DeliverySystem.Services;
 
 namespace Back_DeliverySystem.Controllers
 {
@@ -15,12 +16,19 @@ namespace Back_DeliverySystem.Controllers
     public class StaffController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IAutoAssignmentService _autoAssignment;
+        private readonly ILogger<StaffController> _logger;
 
         private const int MaxDeliveryAttempts = 3;
 
-        public StaffController(AppDbContext context)
+        public StaffController(
+            AppDbContext context,
+            IAutoAssignmentService autoAssignment,
+            ILogger<StaffController> logger)
         {
             _context = context;
+            _autoAssignment = autoAssignment;
+            _logger = logger;
         }
 
         // =====================================================
@@ -370,10 +378,33 @@ namespace Back_DeliverySystem.Controllers
 
             await _context.SaveChangesAsync();
 
+            // Ghi nhận từ chối trước, sau đó tự thử phân cho Staff khác.
+            // AutoAssignmentService loại Staff đã từ chối chính đơn này.
+            // Nếu không còn ứng viên hoặc phát sinh lỗi, đơn vẫn được ghi nhận
+            // từ chối và chờ Operations can thiệp.
+            AutoAssignmentResult? retry = null;
+            try
+            {
+                retry = await _autoAssignment.TryAssignAsync(assignment.ShipmentId);
+            }
+            catch (Exception error)
+            {
+                _logger.LogError(error,
+                    "Automatic reassignment failed after Staff rejected assignment {AssignmentId}",
+                    assignment.Id);
+            }
+
             return Ok(new
             {
-                message =
-                    "Đã từ chối đơn hàng.",
+                message = retry?.Assigned == true
+                    ? "Đã từ chối; hệ thống đã phân công cho Staff khác."
+                    : "Đã từ chối; đơn đang chờ phân công tiếp.",
+                reassignment = retry == null ? null : new
+                {
+                    assigned = retry.Assigned,
+                    reason = retry.Reason,
+                    staffId = retry.StaffId
+                },
 
                 assignment = new
                 {
