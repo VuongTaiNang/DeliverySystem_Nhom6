@@ -38,7 +38,7 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
     'picking_up': 'Đang lấy hàng', 'picked_up': 'Đã lấy hàng',
     'delivering': 'Đang giao hàng', 'delivered': 'Đã giao hàng',
     'return_pending': 'Chờ hoàn hàng', 'returning': 'Đang hoàn hàng',
-    'returned': 'Đã hoàn hàng',
+    'returned': 'Đã hoàn hàng', 'rejected': 'Đã từ chối',
   };
 
   String _field(String name) => (widget.order[name] ?? '').toString();
@@ -181,6 +181,55 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
     }
   }
 
+  /// Cập nhật UI từ kết quả API, không tự đóng màn hình khi đổi trạng thái.
+  /// Một số endpoint chỉ trả shipment hoặc assignment nên cần trạng thái
+  /// dự phòng tương ứng với action đã được backend chấp nhận.
+  void _applyTransition(String action, Map<String, dynamic> result) {
+    const shipmentByAction = <String, String>{
+      'start-pickup': 'picking_up',
+      'pickup-success': 'picked_up',
+      'pickup-failed': 'pickup_failed',
+      'start-delivery': 'delivering',
+      'delivery-success': 'delivered',
+      'delivery-failed': 'delivery_failed',
+      'start-return': 'returning',
+      'return-complete': 'returned',
+    };
+    const assignmentByAction = <String, String>{
+      'accept': 'accepted',
+      'reject': 'rejected',
+      'start-pickup': 'in_progress',
+      'pickup-success': 'in_progress',
+      'pickup-failed': 'accepted',
+      'start-delivery': 'in_progress',
+      'delivery-success': 'completed',
+      'delivery-failed': 'in_progress',
+      'start-return': 'in_progress',
+      'return-complete': 'completed',
+    };
+    final shipment = result['shipment'];
+    final assignment = result['assignment'];
+    final backendShipmentStatus =
+        shipment is Map ? shipment['status']?.toString() : null;
+    final backendAssignmentStatus =
+        assignment is Map ? assignment['status']?.toString() : null;
+    final embeddedAssignmentStatus =
+        shipment is Map ? shipment['assignmentStatus']?.toString() : null;
+
+    setState(() {
+      final shipmentStatus = backendShipmentStatus ?? shipmentByAction[action];
+      final assignmentStatus = backendAssignmentStatus ??
+          embeddedAssignmentStatus ?? assignmentByAction[action];
+      if (shipmentStatus != null) {
+        widget.order['shipmentStatus'] = shipmentStatus;
+      }
+      if (assignmentStatus != null) {
+        widget.order['assignmentStatus'] = assignmentStatus;
+      }
+      _geofenceStatus = null;
+    });
+  }
+
   Future<void> _act(String action) async {
     if (_busy) return;
     String? reason;
@@ -193,32 +242,29 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
       final rawId = widget.order['assignmentId'];
       final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
       if (id == null) throw Exception('Thiếu mã phân công của đơn hàng.');
-      await StaffApiService.performPath(action, id, reason: reason);
+      final result = await StaffApiService.performPath(action, id, reason: reason);
       if (!mounted) return;
 
-      if (action == 'accept' && _isHighValue) {
-        setState(() => widget.order['assignmentStatus'] = 'accepted');
-        await _showHighValueAlert();
-        if (mounted) Navigator.of(context).pop(true);
-        return;
+      _applyTransition(action, result);
+      // Không để Geofence của giai đoạn trước tiếp tục chạy sau khi
+      // shipment đã chuyển sang giai đoạn tiếp theo.
+      await _geofenceService?.stop();
+      if (!mounted) return;
+      if (action == 'start-pickup' || action == 'start-delivery') {
+        _startGeofence();
       }
 
-      if (action == 'start-pickup' || action == 'start-delivery') {
-        setState(() {
-          widget.order['shipmentStatus'] =
-              action == 'start-pickup' ? 'picking_up' : 'delivering';
-        });
-        _startGeofence();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã bắt đầu công việc. Geofence đang được bật.')),
-        );
-        return;
+      if (action == 'accept' && _isHighValue) {
+        await _showHighValueAlert();
+        if (!mounted) return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cập nhật đơn hàng thành công')),
+        SnackBar(content: Text(result['message']?.toString() ??
+            'Cập nhật đơn hàng thành công')),
       );
-      Navigator.of(context).pop(true);
+      // Giữ màn hình chi tiết để Staff theo dõi trạng thái kế tiếp.
+      // Chỉ quay lại danh sách khi người dùng chủ động nhấn Back.
     } catch (error) {
       if (mounted) setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -347,21 +393,27 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
             child: Text(action[1]),
           )),
         )),
-        if (available.isEmpty) const Padding(
-          padding: EdgeInsets.only(top: 14),
-          child: Text('Không có thao tác dành cho trạng thái hiện tại.'),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          icon: const Icon(Icons.report_problem_outlined),
-          label: const Text('Báo cáo sự cố'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.red.shade700,
-            minimumSize: const Size(double.infinity, 54),
-            side: BorderSide(color: Colors.red.shade700),
+        if (available.isEmpty) Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Text(
+            ['delivered', 'returned', 'rejected'].contains(status)
+                ? 'Nhiệm vụ đã kết thúc. Nhấn Back để quay lại danh sách.'
+                : 'Không có thao tác dành cho trạng thái hiện tại.',
           ),
-          onPressed: _busy ? null : _openIncidentPage,
         ),
+        if (!['delivered', 'returned', 'rejected'].contains(status)) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.report_problem_outlined),
+            label: const Text('Báo cáo sự cố'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              minimumSize: const Size(double.infinity, 54),
+              side: BorderSide(color: Colors.red.shade700),
+            ),
+            onPressed: _busy ? null : _openIncidentPage,
+          ),
+        ],
       ]),
     );
   }
