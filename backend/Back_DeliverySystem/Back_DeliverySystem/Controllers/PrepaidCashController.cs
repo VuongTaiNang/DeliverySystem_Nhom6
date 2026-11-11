@@ -115,7 +115,7 @@ public class PrepaidCashController : ControllerBase
                 return Conflict(new { message = "Đơn đang có giao dịch VNPay chờ xử lý. Vui lòng kiểm tra hoặc xử lý giao dịch đó trước khi chọn tiền mặt." });
             return Ok(new
             {
-                paymentId = pending.Id, shipmentId, amount = pending.Amount,
+                paymentId = pending.Id, shipmentId = shipment.Id, amount = pending.Amount,
                 method = pending.Method, status = pending.Status,
                 message = "Yêu cầu nộp tiền mặt đã được ghi nhận. Đợi Operations kiểm tra biên nhận."
             });
