@@ -854,15 +854,14 @@ namespace Back_DeliverySystem.Controllers
             if (trackedLocation != null)
             {
                 _context.StaffLocations.Remove(trackedLocation);
+                _context.ShipmentEvents.Add(new ShipmentEvent
+                {
+                    ShipmentId = shipment.Id,
+                    Status = "location_tracking_ended",
+                    At = DateTime.UtcNow,
+                    Note = $"{staff.EmployeeCode}: kết thúc chia sẻ vị trí cho đơn hàng sau khi giao thành công."
+                });
             }
-
-            _context.ShipmentEvents.Add(new ShipmentEvent
-            {
-                ShipmentId = shipment.Id,
-                Status = "location_tracking_ended",
-                At = DateTime.UtcNow,
-                Note = $"{staff.EmployeeCode}: kết thúc chia sẻ vị trí cho đơn hàng sau khi giao thành công."
-            });
 
             await _context.SaveChangesAsync();
 
