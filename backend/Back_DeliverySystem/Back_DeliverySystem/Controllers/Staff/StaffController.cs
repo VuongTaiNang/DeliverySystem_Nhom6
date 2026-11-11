@@ -144,6 +144,9 @@ namespace Back_DeliverySystem.Controllers
                         codAmount =
                             shipment.CodAmount,
 
+                        declaredValue =
+                            shipment.DeclaredValue,
+
                         service =
                             shipment.Service,
 
