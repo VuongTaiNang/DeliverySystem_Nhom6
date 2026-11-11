@@ -163,6 +163,12 @@ const shipmentStatusLabel = <String, String>{
   'returned': 'Đã hoàn hàng',
 };
 
+/// Nhiệm vụ đã kết thúc hoặc không còn đủ điều kiện nhận cập nhật vị trí.
+class LocationSharingEndedException implements Exception {
+  @override
+  String toString() => 'Nhiệm vụ không còn hoạt động. Đã dừng chia sẻ vị trí.';
+}
+
 class StaffApiService {
   static const int _minReason = 3; // khớp DTO backend
   static const int _maxReason = 300;
@@ -250,6 +256,9 @@ class StaffApiService {
     final data = _decode(response);
     if (_ok(response))
       return data is Map<String, dynamic> ? data : <String, dynamic>{};
+    if (response.statusCode == 409) {
+      throw LocationSharingEndedException();
+    }
     throw Exception(_message(response, data, 'Không cập nhật được vị trí.'));
   }
 
