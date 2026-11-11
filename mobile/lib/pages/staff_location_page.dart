@@ -7,7 +7,8 @@ import '../services/staff_api_service.dart';
 import '../services/staff_location_service.dart';
 
 class StaffLocationPage extends StatefulWidget {
-  const StaffLocationPage({super.key});
+  final int? initialAssignmentId;
+  const StaffLocationPage({super.key, this.initialAssignmentId});
   @override
   State<StaffLocationPage> createState() => _StaffLocationPageState();
 }
@@ -50,7 +51,9 @@ class _StaffLocationPageState extends State<StaffLocationPage> {
         _selectedAssignmentId =
             active.any((x) => x.assignmentId == _selectedAssignmentId)
             ? _selectedAssignmentId
-            : (active.isEmpty ? null : active.first.assignmentId);
+            : (active.any((x) => x.assignmentId == widget.initialAssignmentId)
+                ? widget.initialAssignmentId
+                : (active.isEmpty ? null : active.first.assignmentId));
       });
     } catch (error) {
       if (mounted)
