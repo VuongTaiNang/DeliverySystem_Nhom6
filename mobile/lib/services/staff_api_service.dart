@@ -27,6 +27,7 @@ class StaffAssignment {
   final String goods;
   final num weightKg;
   final num codAmount;
+  final num declaredValue;
   final String service;
   final String notes;
 
@@ -48,6 +49,7 @@ class StaffAssignment {
     required this.goods,
     required this.weightKg,
     required this.codAmount,
+    required this.declaredValue,
     required this.service,
     required this.notes,
   });
@@ -70,6 +72,7 @@ class StaffAssignment {
     'goods': goods,
     'weightKg': weightKg,
     'codAmount': codAmount,
+    'declaredValue': declaredValue,
     'service': service,
     'notes': notes,
   };
@@ -100,6 +103,7 @@ class StaffAssignment {
       goods: s('goods'),
       weightKg: n('weightKg'),
       codAmount: n('codAmount'),
+      declaredValue: n('declaredValue'),
       service: s('service'),
       notes: s('notes'),
     );
