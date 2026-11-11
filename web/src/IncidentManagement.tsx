@@ -4,6 +4,7 @@ import {
   api,
   INCIDENT_STATUSES,
   COMPLAINT_CATEGORIES,
+  STAFF_INCIDENT_CATEGORIES,
   typeLabel,
 } from "./api";
 import type {
@@ -278,6 +279,12 @@ function IncidentEditor({
   onClassified,
   onClassifyError,
 }: IncidentEditorProps) {
+  const isStaffIncident = incident.source === "staff";
+  const categories = isStaffIncident ? STAFF_INCIDENT_CATEGORIES : COMPLAINT_CATEGORIES;
+  const categoryName = incident.category == null ? "" :
+    (categories as Record<string, string>)[incident.category] ??
+    (COMPLAINT_CATEGORIES as Record<string, string>)[incident.category] ??
+    incident.category;
   const [response, setResponse] = useState(incident.response ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -346,7 +353,7 @@ function IncidentEditor({
     <section className="panel">
       <div className="panel-heading">
         <div>
-          <h2>{typeLabel(incident.type)}</h2>
+          <h2>{isStaffIncident ? "Sự cố nhân viên" : "Khiếu nại khách hàng"}: {typeLabel(incident.type)}</h2>
           <p className="muted tracking-code">
             Vận đơn: {incident.shipmentId}
           </p>
@@ -371,7 +378,7 @@ function IncidentEditor({
 
       <div className="incident-editor-space">
         <label>
-          Phân loại
+          {isStaffIncident ? "Nhóm nguyên nhân sự cố" : "Phân loại khiếu nại"}
           <select
             value={incident.category ?? ""}
             disabled={incident.status === "resolved"}
@@ -380,7 +387,12 @@ function IncidentEditor({
             <option value="" disabled>
               -- Chọn phân loại --
             </option>
-            {Object.entries(COMPLAINT_CATEGORIES).map(([key, label]) => (
+            {incident.category && !(incident.category in categories) && (
+              <option value={incident.category}>
+                {categoryName} (phân loại trước đây)
+              </option>
+            )}
+            {Object.entries(categories).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
               </option>
@@ -419,7 +431,9 @@ function IncidentEditor({
           <fieldset disabled={busy}>
             {incident.status === "pending" ? (
               <p className="muted">
-                Bắt đầu xử lý để chuyển báo cáo sang trạng thái{" "}
+                {isStaffIncident
+                  ? "Tiếp nhận báo cáo của Staff để kiểm tra nguyên nhân, hỗ trợ giao nhận và chuyển sang trạng thái"
+                  : "Bắt đầu xử lý để chuyển khiếu nại sang trạng thái"}{" "}
                 <strong>Đang xử lý</strong>.
               </p>
             ) : (
@@ -431,7 +445,9 @@ function IncidentEditor({
                   maxLength={1000}
                   required
                   onChange={(event) => setResponse(event.target.value)}
-                  placeholder="Mô tả nguyên nhân, biện pháp và kết quả xử lý…"
+                  placeholder={isStaffIncident
+                    ? "Hướng xử lý sự cố, hỗ trợ Staff và kết quả thực hiện…"
+                    : "Mô tả nguyên nhân, biện pháp và kết quả xử lý…"}
                 />
                 <span className="muted">
                   {response.length}/1.000 ký tự
