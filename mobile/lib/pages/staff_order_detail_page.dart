@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/staff_api_service.dart';
 import '../services/geofence_service.dart';
 import 'staff_incident_page.dart';
+import 'staff_location_page.dart';
 
 class StaffOrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -41,6 +42,49 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
   };
 
   String _field(String name) => (widget.order[name] ?? '').toString();
+  static const int _highValueThreshold = 5000000;
+
+  num get _declaredValue {
+    final value = widget.order['declaredValue'];
+    return value is num ? value : num.tryParse('$value') ?? 0;
+  }
+
+  bool get _isHighValue => _declaredValue >= _highValueThreshold;
+
+  int? get _assignmentId {
+    final value = widget.order['assignmentId'];
+    return value is num ? value.toInt() : int.tryParse('$value');
+  }
+
+  Future<void> _openLocationSharing() async {
+    final id = _assignmentId;
+    if (id == null || id <= 0) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => StaffLocationPage(initialAssignmentId: id),
+    ));
+  }
+
+  Future<void> _showHighValueAlert() async {
+    if (!mounted) return;
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Đơn hàng giá trị cao'),
+        content: Text(
+          'Giá trị khai báo: ${_declaredValue.toStringAsFixed(0)} đ. '
+          'Bạn nên bật chia sẻ GPS để Operations theo dõi đơn hàng. '
+          'Vị trí chỉ được gửi trong lúc bạn chủ động chia sẻ.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Để sau')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Đến màn hình bật GPS')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (enable == true) await _openLocationSharing();
+  }
 
   @override
   void initState() {
@@ -152,6 +196,13 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
       await StaffApiService.performPath(action, id, reason: reason);
       if (!mounted) return;
 
+      if (action == 'accept' && _isHighValue) {
+        setState(() => widget.order['assignmentStatus'] = 'accepted');
+        await _showHighValueAlert();
+        if (mounted) Navigator.of(context).pop(true);
+        return;
+      }
+
       if (action == 'start-pickup' || action == 'start-delivery') {
         setState(() {
           widget.order['shipmentStatus'] =
@@ -239,9 +290,34 @@ class _StaffOrderDetailPageState extends State<StaffOrderDetailPage> {
             Text('${_field('recipientName')} • ${_field('recipientPhone')}'),
             const Divider(height: 28),
             Text('COD: ${widget.order['codAmount'] ?? 0} đ'),
+            Text('Giá trị khai báo: ${_declaredValue.toStringAsFixed(0)} đ'),
             if (_field('notes').isNotEmpty) Text('Ghi chú: ${_field('notes')}'),
           ]),
         )),
+        if (_isHighValue &&
+            !['assigned', 'rejected', 'completed', 'cancelled'].contains(assignmentStatus) &&
+            !['delivered', 'returned'].contains(shipmentStatus)) Card(
+          color: const Color(0xFFFFF3DF),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.shield_outlined, color: Color(0xFF9B5900)),
+                SizedBox(width: 8),
+                Expanded(child: Text('Đơn hàng giá trị cao – đề nghị bật GPS',
+                  style: TextStyle(fontWeight: FontWeight.bold))),
+              ]),
+              const SizedBox(height: 8),
+              const Text('Bật chia sẻ vị trí khi thực hiện nhiệm vụ để Operations hỗ trợ giám sát. Bạn có thể tự dừng chia sẻ.'),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _openLocationSharing,
+                icon: const Icon(Icons.my_location),
+                label: const Text('Đến màn hình bật GPS'),
+              ),
+            ]),
+          ),
+        ),
         if (_geofenceStatus != null) Card(
           color: const Color(0xFFEAF3EF),
           child: Padding(
