@@ -90,7 +90,6 @@ export default function VnPayPanel({
   const paid = payment?.status === "paid";
   const pending = payment?.status === "pending";
   const method = payment?.method;
-  const canStart = !loading && !paid && !pending;
 
   return (
     <section className="panel" aria-label="Thanh toán phí vận chuyển Shop trả trước">
