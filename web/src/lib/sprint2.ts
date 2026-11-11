@@ -34,10 +34,26 @@ export const staffApi = {
     }
   },
 };
-export interface VnPayPayment { paymentId: string; shipmentId: string; amount: number; status: string; paymentUrl: string; transactionReference: string; }
+export interface PrepaidPayment {
+  paymentId: string | null;
+  shipmentId: string;
+  amount: number;
+  status: string;
+  method?: "cash" | "vnpay" | null;
+  transactionReference?: string | null;
+  paidAt?: string | null;
+  message?: string;
+}
+export interface VnPayPayment extends PrepaidPayment {
+  paymentId: string;
+  paymentUrl: string;
+  transactionReference: string;
+}
 export const paymentApi = {
-  create: (shipmentId: string) => request<VnPayPayment>("/payments/vnpay", {method:"POST", body:JSON.stringify({shipmentId})}),
-  get: (paymentId: string) => request<VnPayPayment>(`/payments/${encodeURIComponent(paymentId)}`)
+  create: (shipmentId: string) => request<VnPayPayment>("/payments/vnpay", { method: "POST", body: JSON.stringify({ shipmentId }) }),
+  requestCash: (shipmentId: string) => request<PrepaidPayment>("/payments/cash/request", { method: "POST", body: JSON.stringify({ shipmentId }) }),
+  byShipment: (shipmentId: string) => request<PrepaidPayment>(`/payments/shipment/${encodeURIComponent(shipmentId)}`),
+  get: (paymentId: string) => request<PrepaidPayment>(`/payments/${encodeURIComponent(paymentId)}`),
 };
 export interface ShipmentPaymentStatus {
   shipmentId: string;
