@@ -732,6 +732,11 @@ class _CreateOrderPageState
                 setState(() { _pickupLocation = location; _pickupApproximate = false; });
               },
             ),
+            if (_pickupApproximate) const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Vị trí hiện tại chỉ là gần đúng theo tên đường. Hãy chạm bản đồ để xác nhận điểm lấy hàng.',
+                style: TextStyle(color: Color(0xFF9B5900), fontWeight: FontWeight.w600)),
+            ),
             const SizedBox(height: 20),
 
             // ===============================================
@@ -829,6 +834,11 @@ class _CreateOrderPageState
                 _invalidateQuote();
                 setState(() { _deliveryLocation = location; _deliveryApproximate = false; });
               },
+            ),
+            if (_deliveryApproximate) const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Vị trí hiện tại chỉ là gần đúng theo tên đường. Hãy chạm bản đồ để xác nhận điểm giao hàng.',
+                style: TextStyle(color: Color(0xFF9B5900), fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 20),
 
