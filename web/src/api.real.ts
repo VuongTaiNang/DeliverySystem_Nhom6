@@ -205,7 +205,19 @@ export const COMPLAINT_CATEGORIES = {
   other: "Khác",
 } as const;
 
-export type ComplaintCategory = keyof typeof COMPLAINT_CATEGORIES;
+// Phân loại xử lý nội bộ cho sự cố Staff (#22), tách khỏi khiếu nại Customer.
+export const STAFF_INCIDENT_CATEGORIES = {
+  recipient_issue: "Người nhận không hợp tác / không liên lạc",
+  address_issue: "Sai địa chỉ hoặc vị trí giao nhận",
+  goods_issue: "Vấn đề hàng hóa",
+  transport_issue: "Phương tiện hoặc hành trình",
+  safety_incident: "Tai nạn / an toàn giao nhận",
+  other: "Sự cố khác",
+} as const;
+
+export type ComplaintCategory =
+  | keyof typeof COMPLAINT_CATEGORIES
+  | keyof typeof STAFF_INCIDENT_CATEGORIES;
 
 // Loại sự cố do Staff báo cáo khi giao hàng
 export const STAFF_INCIDENT_TYPES = {
@@ -581,7 +593,8 @@ async classifyComplaint(
   incidentId: number,
   category: ComplaintCategory
 ): Promise<void> {
-  if (!Object.prototype.hasOwnProperty.call(COMPLAINT_CATEGORIES, category)) {
+  if (!Object.prototype.hasOwnProperty.call(COMPLAINT_CATEGORIES, category) &&
+        !Object.prototype.hasOwnProperty.call(STAFF_INCIDENT_CATEGORIES, category)) {
     throw new Error("Phân loại không hợp lệ.");
   }
   await request<unknown>(`/complaints/${incidentId}/classify`, {
