@@ -669,6 +669,20 @@ label { display: grid; gap: 9px; font-size: 12px; font-weight: 500; }
   margin-top: 22px;
 }
 
+/* Labels with helper copy have an extra child: avoid grid track
+   distribution pushing the other column's input downward. */
+.settlement-adjustment-fields > label {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 9px;
+}
+.settlement-adjustment-fields > label > input {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
 .settlement-total {
   display: flex;
   justify-content: space-between;
