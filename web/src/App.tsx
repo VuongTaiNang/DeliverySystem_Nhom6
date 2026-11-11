@@ -28,6 +28,7 @@ import OperationsDashboard from "./OperationsDashboard";
 const OperationsShipmentsPage = lazy(() => import("./pages/OperationsShipmentsPage"));
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
 const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
+const OperationsCashPaymentsPage = lazy(() => import("./pages/OperationsCashPaymentsPage"));
 
 type Page =
   | "home"
@@ -46,6 +47,7 @@ type Page =
   | "routes"
   | "areas"
   | "settlements"
+  | "cash-payments"
   | "account"
   | "payment-result";
 
@@ -66,6 +68,7 @@ const PATH_MAP: Record<Page, string> = {
   routes: "/operations/routes",
   areas: "/operations/areas",
   settlements: "/settlements",
+  "cash-payments": "/operations/prepaid-fees",
   account: "/account",
   "payment-result": "/payment/result",
 };
@@ -107,6 +110,7 @@ function getPageFromLocation(): Page | null {
     if (val === "/orders/create" || val === "orders/create" || val === "/create" || val === "create") return "create";
     if (val === "/shipments" || val === "shipments") return "shipments";
     if (val === "/settlements" || val === "settlements") return "settlements";
+    if (val === "/operations/prepaid-fees" || val === "operations/prepaid-fees" || val === "cash-payments") return "cash-payments";
     if (val === "/reports" || val === "reports") return "reports";
     if (val === "/incidents" || val === "incidents") return "incidents";
     if (val === "/my-complaints" || val === "my-complaints") return "my-complaints";
@@ -162,6 +166,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
     "routes",
     "areas",
     "settlements",
+    "cash-payments",
     "account",
   ],
 };
@@ -725,6 +730,7 @@ function Badge({ shipment }: {
       routes: "Quản lý tuyến giao hàng",
       areas: "Quản lý khu vực",
       settlements: "Đối soát COD",
+      "cash-payments": "Thu phí trả trước",
       account: "Tài khoản của tôi",
       "payment-result": "Kết quả thanh toán VNPay",
     };
@@ -1262,7 +1268,7 @@ function Badge({ shipment }: {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
             }}/>) : page === "incidents" ? (<IncidentManagement />) : page === "reports" ? (<ReportsPage />) : page === "pricing" ? (<PricingPage />) : page === "pricing-services" ? (<PricingServicesPage onNavigate={navigate} />) : page === "support" ? (<PolicyFAQPage />) : page === "dispatch" ? (<DispatchPage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
-            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
+            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "cash-payments" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải thu phí trả trước…</p></section>}><OperationsCashPaymentsPage /></Suspense>) : page === "payment-result" ? null : page === "account" ? (
               <section className="panel"><h2>Tài khoản</h2><p>Thông tin tài khoản: {user?.name ?? "Khách"}</p></section>
             ) : (<section className="panel">
               <div className="panel-heading">
@@ -1363,14 +1369,14 @@ function Badge({ shipment }: {
               
               <IncidentPanel key={selected.id} shipmentId={selected.id}/>
               {normalizedRole === "customer" && (
-                <VnPayPanel key={selected.id} shipmentId={selected.id} feePayer={selected.feePayer} />
+                <VnPayPanel key={selected.id} shipmentId={selected.id} feePayer={selected.feePayer} fee={selected.fee} />
               )}
 
               {null}
             </section>)}
     </>);
     const operationsSection: OperationsSection =
-      page === "dashboard" ? "dashboard" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
+      page === "dashboard" ? "dashboard" : page === "cash-payments" ? "cash-payments" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
     if (normalizedRole === "operations") {
       return (
         <OperationsLayout
@@ -1385,6 +1391,8 @@ function Badge({ shipment }: {
                 ? "routes"
                 : section === "areas"
                 ? "areas"
+                : section === "cash-payments"
+                ? "cash-payments"
                 : "settlements"
             )
           }
