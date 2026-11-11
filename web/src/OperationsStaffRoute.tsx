@@ -42,6 +42,7 @@ export default function OperationsStaffRoute() {
       tracking: "/operations/staff-tracking",
       incidents: "/incidents",
       settlements: "/settlements",
+      "cash-payments": "/operations/prepaid-fees",
     };
     window.location.assign(path[section]);
   }
