@@ -53,7 +53,7 @@ export const paymentApi = {
   create: (shipmentId: string) => request<VnPayPayment>("/payments/vnpay", { method: "POST", body: JSON.stringify({ shipmentId }) }),
   requestCash: (shipmentId: string) => request<PrepaidPayment>("/payments/cash/request", { method: "POST", body: JSON.stringify({ shipmentId }) }),
   byShipment: (shipmentId: string) => request<PrepaidPayment>(`/payments/shipment/${encodeURIComponent(shipmentId)}`),
-  get: (paymentId: string) => request<PrepaidPayment>(`/payments/${encodeURIComponent(paymentId)}`),
+  get: (paymentId: string) => request<PrepaidPayment & { paymentId: string }>(`/payments/${encodeURIComponent(paymentId)}`),
 };
 export interface ShipmentPaymentStatus {
   shipmentId: string;
