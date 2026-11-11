@@ -8,7 +8,7 @@ type PaymentDetails = {
   shipmentId: string;
   amount: number;
   status: string;
-  method?: string;
+  method?: string | null;
   transactionReference?: string | null;
   paidAt?: string | null;
 };
