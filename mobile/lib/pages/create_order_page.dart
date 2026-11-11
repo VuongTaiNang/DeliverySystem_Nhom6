@@ -62,6 +62,29 @@ class _CreateOrderPageState
   LatLng? _deliveryLocation;
   bool _searchingPickup = false;
   bool _searchingDelivery = false;
+  bool _pickupApproximate = false;
+  bool _deliveryApproximate = false;
+
+  // Nominatim có thể không nhận ra số nhà/hẻm; chỉ dùng tên đường
+  // làm kết quả dự phòng, không coi đó là tọa độ chính xác của số nhà.
+  String? _streetFallback(String address) {
+    final segments = address.split(',');
+    if (segments.length < 2) return null;
+    final street = segments.first.trim().replaceFirst(
+      RegExp(r'^(?:số\s*)?\d+[a-zA-Z]?(?:[/\-]\d+[a-zA-Z]?)*\s*',
+          caseSensitive: false),
+      '',
+    ).trim();
+    if (street.length < 4) return null;
+    final normalized = address.toLowerCase();
+    final city = normalized.contains('hcm') ||
+            normalized.contains('hồ chí minh') ||
+            normalized.contains('sài gòn')
+        ? 'Hồ Chí Minh'
+        : segments.last.trim();
+    if (city.isEmpty) return null;
+    return '$street, $city';
+  }
 
   Future<void> _locateAddress({required bool pickup}) async {
     final controller = pickup ? _pickup : _delivery;
@@ -77,33 +100,64 @@ class _CreateOrderPageState
       else { _searchingDelivery = true; }
     });
     try {
-      final uri = Uri.parse('${ApiService.baseUrl}/api/v1/geocoding/search')
-          .replace(queryParameters: {'q': address});
-      final response = await http.get(uri)
-          .timeout(const Duration(seconds: 15));
-      final data = jsonDecode(response.body);
-      if (response.statusCode != 200 || data is! Map) {
-        final message = data is Map ? data['message'] : null;
-        throw Exception(message?.toString() ?? 'Không tìm được địa chỉ.');
+      final fallback = _streetFallback(address);
+      final queries = <String>[
+        address,
+        if (fallback != null && fallback.toLowerCase() != address.toLowerCase())
+          fallback,
+      ];
+      Map<String, dynamic>? result;
+      var approximate = false;
+      for (var index = 0; index < queries.length; index++) {
+        if (index > 0) {
+          // Nominatim: tối đa khoảng một yêu cầu mỗi giây.
+          await Future<void>.delayed(const Duration(milliseconds: 1100));
+        }
+        final uri = Uri.parse(ApiService.baseUrl + '/api/v1/geocoding/search')
+            .replace(queryParameters: {'q': queries[index]});
+        final response = await http.get(uri)
+            .timeout(const Duration(seconds: 15));
+        final dynamic decoded = jsonDecode(response.body);
+        if (response.statusCode == 404 && index < queries.length - 1) {
+          continue;
+        }
+        if (response.statusCode != 200 || decoded is! Map) {
+          final message = decoded is Map ? decoded['message'] : null;
+          throw Exception(message?.toString() ?? 'Không tìm được địa chỉ.');
+        }
+        result = Map<String, dynamic>.from(decoded);
+        approximate = index > 0;
+        break;
       }
-      final latitude = (data['latitude'] as num).toDouble();
-      final longitude = (data['longitude'] as num).toDouble();
+      if (result == null) throw Exception('Không tìm thấy vị trí.');
+      final latitude = (result['latitude'] as num).toDouble();
+      final longitude = (result['longitude'] as num).toDouble();
       if (!latitude.isFinite || !longitude.isFinite ||
-          latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+          latitude < -90 || latitude > 90 ||
+          longitude < -180 || longitude > 180) {
         throw Exception('Tọa độ trả về không hợp lệ.');
       }
-      if (!mounted) return;
-      // Không dùng kết quả cũ nếu người dùng đã sửa nội dung trong lúc tìm.
-      if (controller.text.trim() != address) return;
+      if (!mounted || controller.text.trim() != address) return;
       setState(() {
-        if (pickup) { _pickupLocation = LatLng(latitude, longitude); }
-        else { _deliveryLocation = LatLng(latitude, longitude); }
+        if (pickup) {
+          _pickupLocation = LatLng(latitude, longitude);
+          _pickupApproximate = approximate;
+        } else {
+          _deliveryLocation = LatLng(latitude, longitude);
+          _deliveryApproximate = approximate;
+        }
         _quote = null;
       });
-      _show('Đã tìm thấy vị trí. Hãy chạm bản đồ để chỉnh ghim cho chính xác.', false);
+      _show(
+        approximate
+            ? 'Chỉ tìm được tên đường, chưa xác định số nhà. Hãy chạm bản đồ để xác nhận ghim chính xác.'
+            : 'Đã tìm thấy địa chỉ. Hãy kiểm tra lại ghim trên bản đồ.',
+        false,
+      );
     } catch (error) {
       if (mounted) {
-        _show('Không tìm được địa chỉ: ${error.toString().replaceFirst('Exception: ', '')}', true);
+        _show('Không tìm được địa chỉ: ' +
+            error.toString().replaceFirst('Exception: ', ''), true);
       }
     } finally {
       if (mounted) {
@@ -360,6 +414,10 @@ class _CreateOrderPageState
       _show('Vui lòng chọn cả hai vị trí trên bản đồ trước khi báo giá.', true);
       return;
     }
+    if (_pickupApproximate || _deliveryApproximate) {
+      _show('Vị trí tìm theo tên đường chỉ là gần đúng. Hãy chạm bản đồ để xác nhận ghim trước khi báo giá.', true);
+      return;
+    }
 
     if (!_formKey.currentState!.validate()) {
       _show(
@@ -525,9 +583,9 @@ class _CreateOrderPageState
         onChanged: (_) {
           // Đổi địa chỉ phải chọn lại điểm trên bản đồ, và báo giá cũ hết hiệu lực.
           if (identical(controller, _pickup)) {
-            setState(() => _pickupLocation = null);
+            setState(() { _pickupLocation = null; _pickupApproximate = false; });
           } else if (identical(controller, _delivery)) {
-            setState(() => _deliveryLocation = null);
+            setState(() { _deliveryLocation = null; _deliveryApproximate = false; });
           }
           _invalidateQuote();
         },
@@ -671,7 +729,7 @@ class _CreateOrderPageState
               value: _pickupLocation,
               onChanged: (location) {
                 _invalidateQuote();
-                setState(() => _pickupLocation = location);
+                setState(() { _pickupLocation = location; _pickupApproximate = false; });
               },
             ),
             const SizedBox(height: 20),
@@ -769,7 +827,7 @@ class _CreateOrderPageState
               markerColor: Colors.green,
               onChanged: (location) {
                 _invalidateQuote();
-                setState(() => _deliveryLocation = location);
+                setState(() { _deliveryLocation = location; _deliveryApproximate = false; });
               },
             ),
             const SizedBox(height: 20),
