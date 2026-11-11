@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import '../widgets/map_location_picker.dart';
@@ -57,6 +60,74 @@ class _CreateOrderPageState
   Map<String, dynamic>? _quote;
   LatLng? _pickupLocation;
   LatLng? _deliveryLocation;
+  bool _searchingPickup = false;
+  bool _searchingDelivery = false;
+
+  Future<void> _locateAddress({required bool pickup}) async {
+    final controller = pickup ? _pickup : _delivery;
+    final address = controller.text.trim();
+    if (address.length < 3) {
+      _show('Vui lòng nhập địa chỉ chi tiết trước khi tìm trên bản đồ.', true);
+      return;
+    }
+    if (pickup ? _searchingPickup : _searchingDelivery) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      if (pickup) { _searchingPickup = true; }
+      else { _searchingDelivery = true; }
+    });
+    try {
+      final uri = Uri.parse('${ApiService.baseUrl}/api/v1/geocoding/search')
+          .replace(queryParameters: {'q': address});
+      final response = await http.get(uri)
+          .timeout(const Duration(seconds: 15));
+      final data = jsonDecode(response.body);
+      if (response.statusCode != 200 || data is! Map) {
+        final message = data is Map ? data['message'] : null;
+        throw Exception(message?.toString() ?? 'Không tìm được địa chỉ.');
+      }
+      final latitude = (data['latitude'] as num).toDouble();
+      final longitude = (data['longitude'] as num).toDouble();
+      if (!latitude.isFinite || !longitude.isFinite ||
+          latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        throw Exception('Tọa độ trả về không hợp lệ.');
+      }
+      if (!mounted) return;
+      // Không dùng kết quả cũ nếu người dùng đã sửa nội dung trong lúc tìm.
+      if (controller.text.trim() != address) return;
+      setState(() {
+        if (pickup) { _pickupLocation = LatLng(latitude, longitude); }
+        else { _deliveryLocation = LatLng(latitude, longitude); }
+        _quote = null;
+      });
+      _show('Đã tìm thấy vị trí. Hãy chạm bản đồ để chỉnh ghim cho chính xác.', false);
+    } catch (error) {
+      if (mounted) {
+        _show('Không tìm được địa chỉ: ${error.toString().replaceFirst('Exception: ', '')}', true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (pickup) { _searchingPickup = false; }
+          else { _searchingDelivery = false; }
+        });
+      }
+    }
+  }
+
+  Widget _locateButton({required bool pickup}) {
+    final loading = pickup ? _searchingPickup : _searchingDelivery;
+    return Align(
+      alignment: Alignment.centerRight,
+      child: OutlinedButton.icon(
+        onPressed: (_loading || loading) ? null : () => _locateAddress(pickup: pickup),
+        icon: loading
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.search),
+        label: Text(loading ? 'Đang tìm địa chỉ...' : 'Tìm địa chỉ trên bản đồ'),
+      ),
+    );
+  }
 
   // =========================================================
   // COLORS
@@ -592,7 +663,10 @@ class _CreateOrderPageState
 
             const SizedBox(height: 20),
 
+            _locateButton(pickup: true),
+            const SizedBox(height: 8),
             MapLocationPicker(
+              key: ValueKey('pickup-${_pickupLocation?.latitude}-${_pickupLocation?.longitude}'),
               title: 'Chọn vị trí lấy hàng',
               value: _pickupLocation,
               onChanged: (location) {
@@ -686,7 +760,10 @@ class _CreateOrderPageState
 
             const SizedBox(height: 20),
 
+            _locateButton(pickup: false),
+            const SizedBox(height: 8),
             MapLocationPicker(
+              key: ValueKey('delivery-${_deliveryLocation?.latitude}-${_deliveryLocation?.longitude}'),
               title: 'Chọn vị trí giao hàng',
               value: _deliveryLocation,
               markerColor: Colors.green,
