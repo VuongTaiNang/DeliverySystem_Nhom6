@@ -26,6 +26,7 @@ import MapLocationPicker from "./components/MapLocationPicker";
 import OperationsDashboard from "./OperationsDashboard";
 const OperationsRoutesPage = lazy(() => import("./pages/OperationsRoutesPage"));
 const OperationsAreasPage = lazy(() => import("./pages/OperationsAreasPage"));
+const OperationsRatingsPage = lazy(() => import("./pages/OperationsRatingsPage"));
 
 type Page =
   | "home"
@@ -43,6 +44,7 @@ type Page =
   | "dispatch"
   | "routes"
   | "areas"
+  | "ratings"
   | "settlements"
   | "account"
   | "payment-result";
@@ -63,6 +65,7 @@ const PATH_MAP: Record<Page, string> = {
   dispatch: "/dispatch",
   routes: "/operations/routes",
   areas: "/operations/areas",
+  ratings: "/operations/ratings",
   settlements: "/settlements",
   account: "/account",
   "payment-result": "/payment/result",
@@ -114,6 +117,7 @@ function getPageFromLocation(): Page | null {
     if (val === "/dispatch" || val === "dispatch") return "dispatch";
     if (val === "/operations/routes" || val === "operations/routes" || val === "routes") return "routes";
     if (val === "/operations/areas" || val === "operations/areas" || val === "areas") return "areas";
+    if (val === "/operations/ratings" || val === "operations/ratings" || val === "ratings") return "ratings";
     if (val === "/dashboard" || val === "dashboard") return "dashboard";
     return null;
   };
@@ -159,6 +163,7 @@ const ROLE_PAGES: Record<UserRole, Page[]> = {
     "dispatch",
     "routes",
     "areas",
+    "ratings",
     "settlements",
     "account",
   ],
@@ -666,6 +671,7 @@ function Badge({ shipment }: {
       dispatch: "Điều phối giao nhận",
       routes: "Quản lý tuyến giao hàng",
       areas: "Quản lý khu vực",
+      ratings: "Đánh giá dịch vụ",
       settlements: "Đối soát COD",
       account: "Tài khoản của tôi",
       "payment-result": "Kết quả thanh toán VNPay",
@@ -1192,7 +1198,7 @@ function Badge({ shipment }: {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
             }}/>) : page === "incidents" ? (<IncidentManagement />) : page === "reports" ? (<ReportsPage />) : page === "pricing" ? (<PricingPage />) : page === "pricing-services" ? (<PricingServicesPage onNavigate={navigate} />) : page === "support" ? (<PolicyFAQPage />) : page === "dispatch" ? (<DispatchPage shipments={shipments} loading={loading} onShipmentUpdated={(updated) => {
                 setShipments((current) => current.map((shipment) => shipment.id === updated.id ? updated : shipment));
-            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
+            }}/>) : page === "routes" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý tuyến…</p></section>}><OperationsRoutesPage /></Suspense>) : page === "areas" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải quản lý khu vực…</p></section>}><OperationsAreasPage /></Suspense>) : page === "ratings" ? (<Suspense fallback={<section className="panel"><p role="status">Đang tải đánh giá…</p></section>}><OperationsRatingsPage /></Suspense>) : page === "settlements" ? (<SettlementsPage />) : page === "payment-result" ? null : page === "account" ? (
               <section className="panel"><h2>Tài khoản</h2><p>Thông tin tài khoản: {user?.name ?? "Khách"}</p></section>
             ) : (<section className="panel">
               <div className="panel-heading">
@@ -1300,7 +1306,7 @@ function Badge({ shipment }: {
             </section>)}
     </>);
     const operationsSection: OperationsSection =
-      page === "dashboard" ? "dashboard" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : "orders";
+      page === "dashboard" ? "dashboard" : page === "settlements" ? "settlements" : page === "routes" ? "routes" : page === "areas" ? "areas" : page === "ratings" ? "ratings" : "orders";
     if (normalizedRole === "operations") {
       return (
         <OperationsLayout
@@ -1315,6 +1321,8 @@ function Badge({ shipment }: {
                 ? "routes"
                 : section === "areas"
                 ? "areas"
+                : section === "ratings"
+                ? "ratings"
                 : "settlements"
             )
           }
