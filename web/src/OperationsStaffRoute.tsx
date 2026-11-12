@@ -41,6 +41,7 @@ export default function OperationsStaffRoute() {
       staff: "/operations/staff-management",
       tracking: "/operations/staff-tracking",
       incidents: "/incidents",
+      ratings: "/operations/ratings",
       settlements: "/settlements",
     };
     window.location.assign(path[section]);
