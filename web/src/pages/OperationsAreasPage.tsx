@@ -99,45 +99,38 @@ export default function OperationsAreasPage() {
 
   const loadData = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
-    try {
-      const [areasResult, staffResult] = await Promise.allSettled([
-        listOperationsAreas(),
-        listOperationsStaff(),
-      ]);
 
-      const errors: string[] = [];
-      if (areasResult.status === "fulfilled") {
-        setAreas(areasResult.value);
+    // Render the result of each endpoint as soon as it arrives. A slow Areas
+    // query must not block the Staff counters, and vice versa.
+    const loadAreas = listOperationsAreas()
+      .then((data) => {
+        setAreas(data);
         setAreasLoaded(true);
-      } else {
-        errors.push(`Không tải được khu vực: ${areasResult.reason instanceof Error ? areasResult.reason.message : "Lỗi không xác định"}`);
-      }
+        return null;
+      })
+      .catch((error: unknown) =>
+        `Không tải được khu vực: ${error instanceof Error ? error.message : "Lỗi không xác định"}`
+      );
 
-      if (staffResult.status === "fulfilled") {
-        const staffsData = staffResult.value;
+    const loadStaff = listOperationsStaff()
+      .then((staffsData) => {
         setStaffList(staffsData);
         setStaffLoaded(true);
+        setSelectedStaffId((prev) =>
+          prev !== null && staffsData.some((staff) => staff.id === prev)
+            ? prev
+            : staffsData.length > 0 ? staffsData[0].id : null
+        );
+        return null;
+      })
+      .catch((error: unknown) =>
+        `Không tải được nhân viên: ${error instanceof Error ? error.message : "Lỗi không xác định"}`
+      );
 
-        // Nếu chưa chọn staffId, tự động chọn staff đầu tiên nếu có.
-        setSelectedStaffId((prev) => {
-          if (prev !== null && staffsData.some((s) => s.id === prev)) return prev;
-          return staffsData.length > 0 ? staffsData[0].id : null;
-        });
-      } else {
-        errors.push(`Không tải được nhân viên: ${staffResult.reason instanceof Error ? staffResult.reason.message : "Lỗi không xác định"}`);
-      }
-
-      if (errors.length > 0) {
-        setNotice({ kind: "error", text: errors.join(" ") });
-      }
-    } catch (error) {
-      setNotice({
-        kind: "error",
-        text: error instanceof Error ? error.message : "Không tải được dữ liệu khu vực và nhân viên.",
-      });
-    } finally {
-      if (showLoading) setLoading(false);
-    }
+    const errors = (await Promise.all([loadAreas, loadStaff]))
+      .filter((message): message is string => Boolean(message));
+    if (errors.length) setNotice({ kind: "error", text: errors.join(" ") });
+    if (showLoading) setLoading(false);
   }, []);
 
   useEffect(() => {
