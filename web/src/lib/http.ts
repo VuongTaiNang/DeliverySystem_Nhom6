@@ -8,9 +8,10 @@ export class ApiError extends Error {
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
-// React StrictMode can mount effects twice in development. Reuse identical
-// in-flight Operations GETs so they do not double the database work.
-const inFlightOperationsGets = new Map<string, Promise<unknown>>();
+// Deduplicate simultaneous identical GET requests across Customer, Staff,
+// and Operations (including React StrictMode development re-mounts).
+// This is not a persistent cache: fresh data is requested after completion.
+const inFlightGets = new Map<string, Promise<unknown>>();
 
 function normalizeUtcDates(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -39,18 +40,18 @@ function normalizeUtcDates(value: unknown): unknown {
 
 export function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
-  if (method !== "GET" || !path.startsWith("/operations/") || init?.signal || init?.headers || init?.body) {
+  if (method !== "GET" || init?.signal || init?.headers || init?.body) {
     return requestOnce<T>(path, init);
   }
 
   const key = `${localStorage.getItem("express-token") ?? ""}:${path}`;
-  const existing = inFlightOperationsGets.get(key);
+  const existing = inFlightGets.get(key);
   if (existing) return existing as Promise<T>;
 
   const task = requestOnce<T>(path, init);
-  inFlightOperationsGets.set(key, task);
+  inFlightGets.set(key, task);
   const cleanup = () => {
-    if (inFlightOperationsGets.get(key) === task) inFlightOperationsGets.delete(key);
+    if (inFlightGets.get(key) === task) inFlightGets.delete(key);
   };
   void task.then(cleanup, cleanup);
   return task;
