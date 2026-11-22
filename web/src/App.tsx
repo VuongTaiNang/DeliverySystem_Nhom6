@@ -445,15 +445,16 @@ function Badge({ shipment }: {
     }, [page, user?.id]);
     const [pickupLoading, setPickupLoading] =
       useState(user?.role === "customer");
+    // Operations pages such as Areas, Ratings and Dashboard have independent APIs.
+    // Avoid a redundant all-shipments request on those screens.
+    const shouldLoadSharedShipments = normalizedRole !== "operations" ||
+      page === "shipments";
       useEffect(() => {
-  if (!user) {
+  if (!user || !shouldLoadSharedShipments) {
     setShipments([]);
     setLoading(false);
     return;
   }
-
-  // Operations cũng cần gọi GET /api/v1/shipments để hiển thị toàn bộ đơn;
-  // endpoint Backend đã phân quyền và trả đầy đủ đơn cho Operations.
 
   let active = true;
 
@@ -485,7 +486,7 @@ function Badge({ shipment }: {
   return () => {
     active = false;
   };
-}, [user, normalizedRole]);
+}, [user, normalizedRole, shouldLoadSharedShipments]);
       
       useEffect(() => {
         if (!user || user.role !== "customer") {
