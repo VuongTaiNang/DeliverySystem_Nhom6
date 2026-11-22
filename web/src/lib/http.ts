@@ -8,6 +8,10 @@ export class ApiError extends Error {
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
+// React StrictMode can mount effects twice in development. Reuse identical
+// in-flight Operations GETs so they do not double the database work.
+const inFlightOperationsGets = new Map<string, Promise<unknown>>();
+
 function normalizeUtcDates(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(normalizeUtcDates);
@@ -33,7 +37,26 @@ function normalizeUtcDates(value: unknown): unknown {
   return value;
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET" || !path.startsWith("/operations/") || init?.signal || init?.headers || init?.body) {
+    return requestOnce<T>(path, init);
+  }
+
+  const key = `${localStorage.getItem("express-token") ?? ""}:${path}`;
+  const existing = inFlightOperationsGets.get(key);
+  if (existing) return existing as Promise<T>;
+
+  const task = requestOnce<T>(path, init);
+  inFlightOperationsGets.set(key, task);
+  const cleanup = () => {
+    if (inFlightOperationsGets.get(key) === task) inFlightOperationsGets.delete(key);
+  };
+  void task.then(cleanup, cleanup);
+  return task;
+}
+
+async function requestOnce<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
 
@@ -41,15 +64,34 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init?.body) headers.set("Content-Type", "application/json");
 
+  const method = (init?.method ?? "GET").toUpperCase();
+  // On a cold local SQL Server, Operations GETs can take longer than 15s.
+  const timeoutMs = method === "GET" && path.startsWith("/operations/") ? 30000 : 15000;
+  const startedAt = performance.now();
   let response: Response;
   try {
     response = await fetch(`${BASE}/api/v1${path}`, {
       ...init,
       headers,
-      signal: init?.signal ?? AbortSignal.timeout(15000),
+      signal: init?.signal ?? AbortSignal.timeout(timeoutMs),
     });
-  } catch {
-    throw new ApiError(0, "Không kết nối được máy chủ. Vui lòng thử lại sau.");
+  } catch (error) {
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    if (import.meta.env.DEV) {
+      console.warn(`[API] ${method} ${path.split("?")[0]} failed after ${elapsedMs} ms`, error);
+    }
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new ApiError(0, `Máy chủ phản hồi quá chậm (quá ${timeoutMs / 1000} giây). Vui lòng kiểm tra API Operations và SQL Server.`);
+    }
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError(0, "Yêu cầu đã bị hủy trước khi máy chủ trả lời.");
+    }
+    throw new ApiError(0, "Không kết nối được máy chủ. Vui lòng kiểm tra địa chỉ API và kết nối mạng.");
+  }
+
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  if (import.meta.env.DEV && elapsedMs >= 3000) {
+    console.warn(`[API slow] ${method} ${path.split("?")[0]}: ${elapsedMs} ms, HTTP ${response.status}`);
   }
 
   const raw = await response.text();
