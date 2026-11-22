@@ -67,7 +67,12 @@ async function requestOnce<T>(path: string, init?: RequestInit): Promise<T> {
 
   const method = (init?.method ?? "GET").toUpperCase();
   // On a cold local SQL Server, Operations GETs can take longer than 15s.
-  const timeoutMs = method === "GET" && path.startsWith("/operations/") ? 30000 : 15000;
+  // Shipment list also serves the Operations Orders page: give its initial
+  // cold SQL Server request the same diagnostic window as Operations GETs.
+  // This is a temporary guard; slow requests still require backend diagnosis.
+  const slowerList = method === "GET" &&
+    (path.startsWith("/operations/") || path === "/shipments");
+  const timeoutMs = slowerList ? 30000 : 15000;
   const startedAt = performance.now();
   let response: Response;
   try {
