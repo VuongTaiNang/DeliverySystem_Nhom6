@@ -5,6 +5,7 @@ import type { PickupLocation, Quote, ServiceArea, Shipment, ShipmentInput } from
 import "./App.css";
 import IncidentPanel from "./IncidentPanel";
 import MyComplaints from "./MyComplaints";
+import CustomerRating from "./CustomerRating";
 import StaffSprint2 from "./StaffSprint2";
 import VnPayPanel from "./VnPayPanel";
 import PaymentResultPage from "./PaymentResultPage";
@@ -1297,6 +1298,9 @@ function Badge({ shipment }: {
                   </li>))}
               </ol>
               
+              {normalizedRole === "customer" && selected.status === "delivered" && (
+                <CustomerRating key={selected.id} shipmentId={selected.id} />
+              )}
               <IncidentPanel key={selected.id} shipmentId={selected.id}/>
               {normalizedRole === "customer" && (
                 <VnPayPanel key={selected.id} shipmentId={selected.id} feePayer={selected.feePayer} />
