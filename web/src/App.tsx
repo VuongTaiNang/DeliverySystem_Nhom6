@@ -5,6 +5,7 @@ import type { PickupLocation, Quote, ServiceArea, Shipment, ShipmentInput } from
 import "./App.css";
 import IncidentPanel from "./IncidentPanel";
 import MyComplaints from "./MyComplaints";
+import ApiConnectionStatus from "./ApiConnectionStatus";
 import CustomerRating from "./CustomerRating";
 import StaffSprint2 from "./StaffSprint2";
 import VnPayPanel from "./VnPayPanel";
@@ -1482,9 +1483,7 @@ function Badge({ shipment }: {
                       {user.name}
                     </button>
 
-                    <span className="environment">
-                      ● Kết nối API
-                    </span>
+                    <ApiConnectionStatus />
 
                     <button
                       type="button"
