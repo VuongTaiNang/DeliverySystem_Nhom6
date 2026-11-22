@@ -111,14 +111,17 @@ namespace Back_DeliverySystem.Data
                 }
             };
 
+            var emails = staffs.Select(staff => staff.Email).ToArray();
+            var existingEmails = (await context.Users
+                    .AsNoTracking()
+                    .Where(user => emails.Contains(user.Email))
+                    .Select(user => user.Email)
+                    .ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             foreach (var staff in staffs)
             {
-                var existed = await context.Users
-                    .AnyAsync(
-                        x => x.Email == staff.Email
-                    );
-
-                if (!existed)
+                if (!existingEmails.Contains(staff.Email))
                 {
                     context.Users.Add(staff);
                 }
@@ -138,14 +141,17 @@ namespace Back_DeliverySystem.Data
                 .Where(x => x.Role == "staff")
                 .ToListAsync();
 
+            var userIds = staffUsers.Select(user => user.Id).ToArray();
+            var usersWithProfile = (await context.Staffs
+                    .AsNoTracking()
+                    .Where(staff => userIds.Contains(staff.UserId))
+                    .Select(staff => staff.UserId)
+                    .ToListAsync())
+                .ToHashSet();
+
             foreach (var user in staffUsers)
             {
-                var hasProfile = await context.Staffs
-                    .AnyAsync(
-                        x => x.UserId == user.Id
-                    );
-
-                if (hasProfile)
+                if (usersWithProfile.Contains(user.Id))
                 {
                     continue;
                 }
