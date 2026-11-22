@@ -55,6 +55,8 @@ export default function OperationsAreasPage() {
 
   const [areas, setAreas] = useState<OperationsArea[]>([]);
   const [staffList, setStaffList] = useState<OperationsStaff[]>([]);
+  const [areasLoaded, setAreasLoaded] = useState(false);
+  const [staffLoaded, setStaffLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
@@ -97,27 +99,38 @@ export default function OperationsAreasPage() {
 
   const loadData = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
-    try {
-      const [areasData, staffsData] = await Promise.all([
-        listOperationsAreas(),
-        listOperationsStaff().catch(() => [] as OperationsStaff[]),
-      ]);
-      setAreas(areasData);
-      setStaffList(staffsData);
 
-      // Nếu chưa chọn staffId, tự động chọn staff đầu tiên nếu có
-      setSelectedStaffId((prev) => {
-        if (prev !== null && staffsData.some((s) => s.id === prev)) return prev;
-        return staffsData.length > 0 ? staffsData[0].id : null;
-      });
-    } catch (error) {
-      setNotice({
-        kind: "error",
-        text: error instanceof Error ? error.message : "Không tải được dữ liệu khu vực và nhân viên.",
-      });
-    } finally {
-      if (showLoading) setLoading(false);
-    }
+    // Render the result of each endpoint as soon as it arrives. A slow Areas
+    // query must not block the Staff counters, and vice versa.
+    const loadAreas = listOperationsAreas()
+      .then((data) => {
+        setAreas(data);
+        setAreasLoaded(true);
+        return null;
+      })
+      .catch((error: unknown) =>
+        `Không tải được khu vực: ${error instanceof Error ? error.message : "Lỗi không xác định"}`
+      );
+
+    const loadStaff = listOperationsStaff()
+      .then((staffsData) => {
+        setStaffList(staffsData);
+        setStaffLoaded(true);
+        setSelectedStaffId((prev) =>
+          prev !== null && staffsData.some((staff) => staff.id === prev)
+            ? prev
+            : staffsData.length > 0 ? staffsData[0].id : null
+        );
+        return null;
+      })
+      .catch((error: unknown) =>
+        `Không tải được nhân viên: ${error instanceof Error ? error.message : "Lỗi không xác định"}`
+      );
+
+    const errors = (await Promise.all([loadAreas, loadStaff]))
+      .filter((message): message is string => Boolean(message));
+    if (errors.length) setNotice({ kind: "error", text: errors.join(" ") });
+    if (showLoading) setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -460,7 +473,7 @@ export default function OperationsAreasPage() {
       {/* Hero / Header */}
       <section className="ops-areas-hero">
         <div>
-          <h2>Quản lý Khu vực &amp; Phân công Staff (Issue #23 &amp; #24)</h2>
+          <h2>Quản lý Khu vực &amp; Phân công Staff</h2>
           <p className="muted">
             Quản lý chuẩn hóa phường/xã và phân công nhân viên phụ trách khu vực (hỗ trợ thuật toán Auto Assignment phân bổ tự động).
           </p>
@@ -503,19 +516,19 @@ export default function OperationsAreasPage() {
       {/* Thống kê nhanh (KPIs) */}
       <section className="ops-areas-stats">
         <div>
-          <strong>{stats.total}</strong>
+          <strong>{areasLoaded ? stats.total : "—"}</strong>
           <span>Tổng số khu vực</span>
         </div>
         <div>
-          <strong style={{ color: "#137333" }}>{stats.active}</strong>
+          <strong style={{ color: "#137333" }}>{areasLoaded ? stats.active : "—"}</strong>
           <span>Khu vực kích hoạt</span>
         </div>
         <div>
-          <strong>{stats.totalStaff}</strong>
+          <strong>{staffLoaded ? stats.totalStaff : "—"}</strong>
           <span>Tổng số nhân viên</span>
         </div>
         <div>
-          <strong style={{ color: "#123f31" }}>{stats.totalAssignments}</strong>
+          <strong style={{ color: "#123f31" }}>{areasLoaded ? stats.totalAssignments : "—"}</strong>
           <span>Lượt phân công phụ trách</span>
         </div>
       </section>
@@ -574,9 +587,9 @@ export default function OperationsAreasPage() {
 
           {/* Bảng danh sách khu vực */}
           <section className="ops-areas-table-card">
-            {loading && areas.length === 0 ? (
+            {!areasLoaded ? (
               <div style={{ padding: "40px", textAlign: "center", color: "#668177" }}>
-                Đang tải danh sách khu vực…
+                {loading ? "Đang tải danh sách khu vực…" : "Không tải được khu vực từ máy chủ. Vui lòng thử làm mới."}
               </div>
             ) : filteredAreas.length === 0 ? (
               <div style={{ padding: "40px", textAlign: "center", color: "#668177" }}>

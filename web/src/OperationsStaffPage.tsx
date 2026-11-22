@@ -300,8 +300,9 @@ export default function OperationsStaffPage() {
               <label>Số điện thoại
                 <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })} inputMode="numeric" maxLength={10} required />
               </label>
-              <label>Khu vực
-                <input value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value })} maxLength={150} placeholder="Ví dụ: Quận 7" />
+              <label>Khu vực phụ trách
+                <input value={editStaff ? editStaff.area || "Chưa phân công" : "Chưa phân công"} readOnly aria-readonly="true" />
+                <small className="muted">Các phường/xã được gán qua nút "Phân KV" trong danh sách nhân viên, không chỉnh trực tiếp tại đây.</small>
               </label>
               {!editStaff && (
                 <label className="ops-staff-form__wide">Mật khẩu ban đầu

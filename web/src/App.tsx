@@ -444,16 +444,20 @@ function Badge({ shipment }: {
     }, [page, user?.id]);
     const [pickupLoading, setPickupLoading] =
       useState(user?.role === "customer");
+    // The Operations Dispatch page fetches its own paginated API.
+    // Avoid reloading the full /shipments + Events collection in parallel.
+    const shouldLoadSharedShipments = normalizedRole !== "operations" ||
+      page === "shipments";
       useEffect(() => {
-  if (!user) {
+  if (!user || !shouldLoadSharedShipments) {
     setShipments([]);
     setLoading(false);
     return;
   }
 
-  // Operations cũng cần gọi GET /api/v1/shipments để hiển thị toàn bộ đơn;
-  // endpoint Backend đã phân quyền và trả đầy đủ đơn cho Operations.
-
+  // Operations pages such as Areas, Dashboard and Ratings load their own
+  // endpoints. Avoid a redundant shipments request (and unrelated timeout)
+  // when those pages mount. Dispatch and Orders still need this list.
   let active = true;
 
   setLoading(true);
@@ -484,7 +488,7 @@ function Badge({ shipment }: {
   return () => {
     active = false;
   };
-}, [user, normalizedRole]);
+}, [user, normalizedRole, shouldLoadSharedShipments]);
       
       useEffect(() => {
         if (!user || user.role !== "customer") {

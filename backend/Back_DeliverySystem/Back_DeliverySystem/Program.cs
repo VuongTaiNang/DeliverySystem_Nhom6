@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using System.Text;
+using System.Diagnostics;
 using Back_DeliverySystem.Services;
 
 namespace Back_DeliverySystem
@@ -134,6 +135,43 @@ namespace Back_DeliverySystem
             var app =
                 builder.Build();
 
+
+            // Measure the entire ASP.NET request pipeline in Development.
+            // Logs omit query strings and request bodies to avoid leaking user data.
+            if (app.Environment.IsDevelopment())
+            {
+                app.Use(async (context, next) =>
+                {
+                    var stopwatch = Stopwatch.StartNew();
+                    context.Response.OnStarting(() =>
+                    {
+                        context.Response.Headers["Server-Timing"] =
+                            $"app;dur={stopwatch.Elapsed.TotalMilliseconds:F0}";
+                        return Task.CompletedTask;
+                    });
+
+                    try
+                    {
+                        await next();
+                    }
+                    finally
+                    {
+                        stopwatch.Stop();
+                        var duration = stopwatch.Elapsed.TotalMilliseconds;
+                        if (duration >= 1000)
+                        {
+                            app.Logger.LogWarning(
+                                "SLOW API {Method} {Path}: {DurationMs:F0} ms, HTTP {StatusCode}, aborted={Aborted}",
+                                context.Request.Method,
+                                context.Request.Path.Value,
+                                duration,
+                                context.Response.StatusCode,
+                                context.RequestAborted.IsCancellationRequested
+                            );
+                        }
+                    }
+                });
+            }
 
             // =====================================================
             // OPENAPI + SCALAR

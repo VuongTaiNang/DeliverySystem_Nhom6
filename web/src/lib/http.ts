@@ -8,6 +8,11 @@ export class ApiError extends Error {
 
 const BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
+// Deduplicate simultaneous identical GET requests across Customer, Staff,
+// and Operations (including React StrictMode development re-mounts).
+// This is not a persistent cache: fresh data is requested after completion.
+const inFlightGets = new Map<string, Promise<unknown>>();
+
 function normalizeUtcDates(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(normalizeUtcDates);
@@ -33,7 +38,26 @@ function normalizeUtcDates(value: unknown): unknown {
   return value;
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET" || init?.signal || init?.headers || init?.body) {
+    return requestOnce<T>(path, init);
+  }
+
+  const key = `${localStorage.getItem("express-token") ?? ""}:${path}`;
+  const existing = inFlightGets.get(key);
+  if (existing) return existing as Promise<T>;
+
+  const task = requestOnce<T>(path, init);
+  inFlightGets.set(key, task);
+  const cleanup = () => {
+    if (inFlightGets.get(key) === task) inFlightGets.delete(key);
+  };
+  void task.then(cleanup, cleanup);
+  return task;
+}
+
+async function requestOnce<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
 
@@ -41,15 +65,39 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (init?.body) headers.set("Content-Type", "application/json");
 
+  const method = (init?.method ?? "GET").toUpperCase();
+  // On a cold local SQL Server, Operations GETs can take longer than 15s.
+  // Shipment list also serves the Operations Orders page: give its initial
+  // cold SQL Server request the same diagnostic window as Operations GETs.
+  // This is a temporary guard; slow requests still require backend diagnosis.
+  const slowerList = method === "GET" &&
+    (path.startsWith("/operations/") || path === "/shipments");
+  const timeoutMs = slowerList ? 30000 : 15000;
+  const startedAt = performance.now();
   let response: Response;
   try {
     response = await fetch(`${BASE}/api/v1${path}`, {
       ...init,
       headers,
-      signal: init?.signal ?? AbortSignal.timeout(15000),
+      signal: init?.signal ?? AbortSignal.timeout(timeoutMs),
     });
-  } catch {
-    throw new ApiError(0, "Không kết nối được máy chủ. Vui lòng thử lại sau.");
+  } catch (error) {
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    if (import.meta.env.DEV) {
+      console.warn(`[API] ${method} ${path.split("?")[0]} failed after ${elapsedMs} ms`, error);
+    }
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new ApiError(0, `Máy chủ phản hồi quá chậm (quá ${timeoutMs / 1000} giây). Vui lòng kiểm tra API Operations và SQL Server.`);
+    }
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError(0, "Yêu cầu đã bị hủy trước khi máy chủ trả lời.");
+    }
+    throw new ApiError(0, "Không kết nối được máy chủ. Vui lòng kiểm tra địa chỉ API và kết nối mạng.");
+  }
+
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  if (import.meta.env.DEV && elapsedMs >= 3000) {
+    console.warn(`[API slow] ${method} ${path.split("?")[0]}: ${elapsedMs} ms, HTTP ${response.status}`);
   }
 
   const raw = await response.text();
