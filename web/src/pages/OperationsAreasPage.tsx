@@ -98,18 +98,34 @@ export default function OperationsAreasPage() {
   const loadData = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
     try {
-      const [areasData, staffsData] = await Promise.all([
+      const [areasResult, staffResult] = await Promise.allSettled([
         listOperationsAreas(),
-        listOperationsStaff().catch(() => [] as OperationsStaff[]),
+        listOperationsStaff(),
       ]);
-      setAreas(areasData);
-      setStaffList(staffsData);
 
-      // Nếu chưa chọn staffId, tự động chọn staff đầu tiên nếu có
-      setSelectedStaffId((prev) => {
-        if (prev !== null && staffsData.some((s) => s.id === prev)) return prev;
-        return staffsData.length > 0 ? staffsData[0].id : null;
-      });
+      const errors: string[] = [];
+      if (areasResult.status === "fulfilled") {
+        setAreas(areasResult.value);
+      } else {
+        errors.push(`Không tải được khu vực: ${areasResult.reason instanceof Error ? areasResult.reason.message : "Lỗi không xác định"}`);
+      }
+
+      if (staffResult.status === "fulfilled") {
+        const staffsData = staffResult.value;
+        setStaffList(staffsData);
+
+        // Nếu chưa chọn staffId, tự động chọn staff đầu tiên nếu có.
+        setSelectedStaffId((prev) => {
+          if (prev !== null && staffsData.some((s) => s.id === prev)) return prev;
+          return staffsData.length > 0 ? staffsData[0].id : null;
+        });
+      } else {
+        errors.push(`Không tải được nhân viên: ${staffResult.reason instanceof Error ? staffResult.reason.message : "Lỗi không xác định"}`);
+      }
+
+      if (errors.length > 0) {
+        setNotice({ kind: "error", text: errors.join(" ") });
+      }
     } catch (error) {
       setNotice({
         kind: "error",
@@ -460,7 +476,7 @@ export default function OperationsAreasPage() {
       {/* Hero / Header */}
       <section className="ops-areas-hero">
         <div>
-          <h2>Quản lý Khu vực &amp; Phân công Staff (Issue #23 &amp; #24)</h2>
+          <h2>Quản lý Khu vực &amp; Phân công Staff</h2>
           <p className="muted">
             Quản lý chuẩn hóa phường/xã và phân công nhân viên phụ trách khu vực (hỗ trợ thuật toán Auto Assignment phân bổ tự động).
           </p>
