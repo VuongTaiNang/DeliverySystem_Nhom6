@@ -393,9 +393,10 @@ public class OrderController : ControllerBase
         }
 
 
+        // Danh sách không cần nạp toàn bộ ShipmentEvents. Chi tiết vận đơn
+        // vẫn sử dụng GET /shipments/{shipmentId} để trả lịch sử đầy đủ.
         IQueryable<Shipment> query =
             _db.Shipments
-                .Include(x => x.Events)
                 .AsNoTracking();
 
 
