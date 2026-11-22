@@ -18,10 +18,23 @@ export const STATUS = {
 
 export type Status = keyof typeof STATUS;
 
-export const EVENT_STATUS: Record<Status | "arrived_at_pickup" | "arrived_at_delivery", string> = {
+export const EVENT_STATUS: Record<string, string> = {
   ...STATUS,
   arrived_at_pickup: "Nhân viên đã đến điểm lấy hàng",
   arrived_at_delivery: "Nhân viên đã đến điểm giao hàng",
+  assigned_staff: "Đã phân công nhân viên",
+  assignment_accepted: "Nhân viên đã nhận đơn",
+  assignment_rejected: "Nhân viên từ chối đơn",
+  assignment_cancelled: "Đã hủy phân công",
+  assignment_completed: "Đã hoàn thành phân công",
+  waiting_assignment: "Đang chờ phân công",
+  waiting_payment: "Đang chờ thanh toán",
+  location_tracking_started: "Bắt đầu chia sẻ vị trí",
+  location_tracking_ended: "Đã kết thúc chia sẻ vị trí",
+  pickup_success: "Lấy hàng thành công",
+  delivery_success: "Giao hàng thành công",
+  delivery_failed: "Giao hàng thất bại",
+  pickup_failed: "Lấy hàng thất bại",
 };
 
 export type FeePayer = "shop_prepaid" | "recipient" | "deduct_cod";
