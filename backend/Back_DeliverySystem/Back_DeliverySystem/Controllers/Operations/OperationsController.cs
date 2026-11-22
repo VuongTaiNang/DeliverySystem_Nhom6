@@ -31,57 +31,57 @@ namespace Back_DeliverySystem.Controllers
         [HttpGet("dashboard")]
         public async Task<IActionResult> Dashboard()
         {
-            // 1. Thống kê đơn hàng
-            var totalOrders = await _context.Shipments
+            // Aggregate status counters in SQL instead of issuing a separate
+            // database round trip for every status. Empty tables yield zeros.
+            var shipmentStats = await _context.Shipments
                 .AsNoTracking()
-                .CountAsync();
+                .GroupBy(s => 1)
+                .Select(grouped => new
+                {
+                    Total = grouped.Count(),
+                    InDelivery = grouped.Count(s =>
+                        s.Status == "out_for_delivery" || s.Status == "delivering"),
+                    Delivered = grouped.Count(s => s.Status == "delivered"),
+                    Failed = grouped.Count(s => s.Status == "delivery_failed"),
+                    Returned = grouped.Count(s =>
+                        s.Status == "return_pending" ||
+                        s.Status == "returning" ||
+                        s.Status == "returned" ||
+                        s.Status == "return_confirmed")
+                })
+                .FirstOrDefaultAsync();
 
+            var totalOrders = shipmentStats?.Total ?? 0;
+            var inDeliveryOrders = shipmentStats?.InDelivery ?? 0;
+            var deliveredOrders = shipmentStats?.Delivered ?? 0;
+            var failedOrders = shipmentStats?.Failed ?? 0;
+            var returnedOrders = shipmentStats?.Returned ?? 0;
+
+            // The unassigned count needs an active-assignment anti-join.
             var unassignedOrders = await _context.Shipments
                 .AsNoTracking()
-                .Where(s =>
-                    (s.Status == "pending_pickup" ||
-                     s.Status == "pickup_failed") &&
+                .CountAsync(s =>
+                    (s.Status == "pending_pickup" || s.Status == "pickup_failed") &&
                     !_context.DeliveryAssignments.Any(a =>
-                        a.ShipmentId == s.Id && a.IsActive))
-                .CountAsync();
+                        a.ShipmentId == s.Id && a.IsActive));
 
-            var inDeliveryOrders = await _context.Shipments
+            var staffStats = await _context.Staffs
                 .AsNoTracking()
-                .CountAsync(s =>
-                    s.Status == "out_for_delivery" ||
-                    s.Status == "delivering");
+                .GroupBy(s => 1)
+                .Select(grouped => new
+                {
+                    Available = grouped.Count(s =>
+                        s.Status == "available" && s.IsAvailable),
+                    Busy = grouped.Count(s =>
+                        s.Status == "busy" ||
+                        (s.Status != "inactive" && !s.IsAvailable)),
+                    Inactive = grouped.Count(s => s.Status == "inactive")
+                })
+                .FirstOrDefaultAsync();
 
-            var deliveredOrders = await _context.Shipments
-                .AsNoTracking()
-                .CountAsync(s => s.Status == "delivered");
-
-            var failedOrders = await _context.Shipments
-                .AsNoTracking()
-                .CountAsync(s => s.Status == "delivery_failed");
-
-            var returnedOrders = await _context.Shipments
-                .AsNoTracking()
-                .CountAsync(s =>
-                    s.Status == "return_pending" ||
-                    s.Status == "returning" ||
-                    s.Status == "returned" ||
-                    s.Status == "return_confirmed");
-
-            // 2. Thống kê nhân viên
-            var availableStaff = await _context.Staffs
-                .AsNoTracking()
-                .CountAsync(s =>
-                    s.Status == "available" && s.IsAvailable);
-
-            var busyStaff = await _context.Staffs
-                .AsNoTracking()
-                .CountAsync(s =>
-                    s.Status == "busy" ||
-                    (s.Status != "inactive" && !s.IsAvailable));
-
-            var inactiveStaff = await _context.Staffs
-                .AsNoTracking()
-                .CountAsync(s => s.Status == "inactive");
+            var availableStaff = staffStats?.Available ?? 0;
+            var busyStaff = staffStats?.Busy ?? 0;
+            var inactiveStaff = staffStats?.Inactive ?? 0;
 
             // 3. Số đơn theo nhân viên đang được phân công
             var ordersByStaff = await (
