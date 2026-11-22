@@ -29,7 +29,7 @@ export default function MyComplaints() {
   return (
     <section className="my-complaints">
       <div className="my-complaints__heading">
-        <h2>Khiếu nại của tôi</h2>
+        <h2>Danh sách khiếu nại</h2>
         <span className="muted">{items.length} khiếu nại</span>
       </div>
       {items.length === 0 ? (
