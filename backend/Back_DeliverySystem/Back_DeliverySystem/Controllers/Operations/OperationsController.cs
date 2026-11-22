@@ -176,56 +176,70 @@ namespace Back_DeliverySystem.Controllers
         [HttpGet("staff")]
         public async Task<IActionResult> GetStaffs()
         {
-            var staffs =
-                await (
-                    from staff in
-                        _context.Staffs.AsNoTracking()
-
-                    join user in
-                        _context.Users.AsNoTracking()
-
+            // Staff.Area is a legacy free-text field. Sprint 3 area
+            // assignments are maintained in StaffAreas and Areas.
+            // Return active area assignments to stay consistent with "Phân KV".
+            var staffs = await (
+                from staff in _context.Staffs.AsNoTracking()
+                join user in _context.Users.AsNoTracking()
                     on staff.UserId equals user.Id
+                orderby staff.Id descending
+                select new
+                {
+                    id = staff.Id,
+                    employeeCode = staff.EmployeeCode,
+                    userId = user.Id,
+                    fullName = user.FullName,
+                    email = user.Email,
+                    phone = user.Phone,
+                    status = staff.Status,
+                    isAvailable = staff.IsAvailable,
+                    role = user.Role,
+                    createdAt = staff.CreatedAt
+                }
+            ).ToListAsync();
 
-                    orderby staff.Id descending
+            var activeAreaAssignments = await (
+                from staffArea in _context.StaffAreas.AsNoTracking()
+                join area in _context.Areas.AsNoTracking()
+                    on staffArea.AreaId equals area.Id
+                where staffArea.IsActive
+                orderby area.Name
+                select new
+                {
+                    staffArea.StaffId,
+                    area.Name
+                }
+            ).ToListAsync();
 
-                    select new
-                    {
-                        id = staff.Id,
+            var areasByStaff = activeAreaAssignments
+                .GroupBy(assignment => assignment.StaffId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => string.Join(", ",
+                        group.Select(assignment => assignment.Name)
+                            .Distinct()
+                            .OrderBy(name => name))
+                );
 
-                        employeeCode =
-                            staff.EmployeeCode,
+            var result = staffs.Select(staff => new
+            {
+                staff.id,
+                staff.employeeCode,
+                staff.userId,
+                staff.fullName,
+                staff.email,
+                staff.phone,
+                area = areasByStaff.TryGetValue(staff.id, out var names)
+                    ? names
+                    : "Chưa phân công",
+                staff.status,
+                staff.isAvailable,
+                staff.role,
+                staff.createdAt
+            });
 
-                        userId =
-                            user.Id,
-
-                        fullName =
-                            user.FullName,
-
-                        email =
-                            user.Email,
-
-                        phone =
-                            user.Phone,
-
-                        area =
-                            staff.Area,
-
-                        status =
-                            staff.Status,
-
-                        isAvailable =
-                            staff.IsAvailable,
-
-                        role =
-                            user.Role,
-
-                        createdAt =
-                            staff.CreatedAt
-                    }
-                )
-                .ToListAsync();
-
-            return Ok(staffs);
+            return Ok(result);
         }
 
         // =========================================================
