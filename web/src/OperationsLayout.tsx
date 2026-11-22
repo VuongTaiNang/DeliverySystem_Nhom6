@@ -58,7 +58,7 @@ export function OperationsSidebar({
         <span className="brand-icon">E</span>
         express<span className="brand-dot">.</span>
       </div>
-      <p className="nav-caption">OPERATIONS / QUẢN LÝ</p>
+      <p className="nav-caption">KHÔNG GIAN VẬN HÀNH</p>
       <nav aria-label="Điều hướng Operations">
         {operationsItems.map((item) => (
           <button
@@ -74,7 +74,7 @@ export function OperationsSidebar({
         ))}
       </nav>
       <div className="sidebar-note">
-        <strong>EXPRESS Operations</strong>
+        <strong>EXPRESS – Vận hành</strong>
         <p>Quản lý vận hành trên cùng một hệ thống.</p>
       </div>
     </aside>
@@ -97,7 +97,7 @@ export function OperationsHeader({
   return (
     <header className="topbar operations-topbar">
       <div className="operations-header-title">
-        <strong>EXPRESS / Operations</strong>
+        <strong>EXPRESS / Vận hành</strong>
         <span>{operationsItems.find((item) => item.key === currentSection)?.title}</span>
       </div>
       <div className="account-controls">
