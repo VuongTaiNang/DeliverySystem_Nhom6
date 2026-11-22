@@ -1245,7 +1245,14 @@ function Badge({ shipment }: {
                 </select>
               </div>
 
-              {loading ? (<p role="status">Đang tải đơn hàng…</p>) : filtered.length === 0 ? (<div className="empty">
+              {shipmentsLoadError && (
+                <div className="notice error" role="alert">
+                  <p>Không thể cập nhật danh sách đơn hàng: {shipmentsLoadError}</p>
+                  <button type="button" onClick={() => setShipmentsReloadKey((value) => value + 1)}>Thử tải lại</button>
+                </div>
+              )}
+              {loading && shipments.length === 0 ? (<p role="status">Đang tải đơn hàng…</p>) :
+               shipmentsLoadError && shipments.length === 0 ? null : filtered.length === 0 ? (<div className="empty">
                   <h3>Không có đơn hàng phù hợp</h3>
                   <p>Thử từ khóa khác hoặc tạo đơn hàng đầu tiên.</p>
                 </div>) : (<div className="table-scroll">
@@ -1320,13 +1327,29 @@ function Badge({ shipment }: {
                 COD đã thu: {money(selected.codCollected)}
               </p>
 
-              <ol className="timeline">
-                {selected.events.map((event, index) => (<li key={`${event.at}-${index}`}>
-                    <strong>{EVENT_STATUS[event.status] || event.status}</strong>
-                    <time>{new Date(event.at).toLocaleString("vi-VN")}</time>
-                    {event.note && <p>{event.note}</p>}
-                  </li>))}
-              </ol>
+              {detailLoadingId === selected.id ? (
+                <p role="status">Đang tải lịch sử vận chuyển…</p>
+              ) : detailError ? (
+                <div className="notice error" role="alert">
+                  <p>{detailError}</p>
+                  <button type="button" onClick={() => openShipment(selected)}>Thử tải lại chi tiết</button>
+                </div>
+              ) : (
+                <ol className="timeline">
+                  {selected.events.length === 0 && <li>Chưa có sự kiện vận chuyển.</li>}
+                  {selected.events.map((event, index) => (
+                    <li key={event.at + "-" + index}>
+                      <strong>{EVENT_STATUS[event.status] || event.status.replaceAll("_", " ")}</strong>
+                      <time>{new Date(event.at).toLocaleString("vi-VN")}</time>
+                      {event.note && <p>{event.note}</p>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {normalizedRole === "customer" && selected.status === "delivered" &&
+                detailLoadingId !== selected.id && !detailError && (
+                  <CustomerRating key={selected.id} shipmentId={selected.id} />
+              )}
               
               <IncidentPanel key={selected.id} shipmentId={selected.id}/>
               {normalizedRole === "customer" && (
