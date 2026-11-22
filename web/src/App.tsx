@@ -444,8 +444,10 @@ function Badge({ shipment }: {
     }, [page, user?.id]);
     const [pickupLoading, setPickupLoading] =
       useState(user?.role === "customer");
+    // The Operations Dispatch page fetches its own paginated API.
+    // Avoid reloading the full /shipments + Events collection in parallel.
     const shouldLoadSharedShipments = normalizedRole !== "operations" ||
-      page === "shipments" || page === "dispatch";
+      page === "shipments";
       useEffect(() => {
   if (!user || !shouldLoadSharedShipments) {
     setShipments([]);
