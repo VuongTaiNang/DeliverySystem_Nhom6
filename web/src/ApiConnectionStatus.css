@@ -1,0 +1,17 @@
+.api-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: #506455;
+  background: #f1f3f1;
+}
+.api-connection__dot { height: 7px; width: 7px; border-radius: 50%; background: currentColor; }
+.api-connection--ready { color: #236144; background: #eaf6ed; }
+.api-connection--checking { color: #6a7368; background: #f2f4f0; }
+.api-connection--database { color: #996219; background: #fff3dd; }
+.api-connection--offline { color: #a33b30; background: #fceeea; }
+@media (max-width: 640px) { .api-connection { padding: 6px; font-size: 10px; white-space: normal; } }

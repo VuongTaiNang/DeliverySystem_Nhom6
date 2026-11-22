@@ -48,13 +48,34 @@ export function request<T>(path: string, init?: RequestInit): Promise<T> {
   const existing = inFlightGets.get(key);
   if (existing) return existing as Promise<T>;
 
-  const task = requestOnce<T>(path, init);
+  const task = requestReadWithRetry<T>(path, init);
   inFlightGets.set(key, task);
   const cleanup = () => {
     if (inFlightGets.get(key) === task) inFlightGets.delete(key);
   };
   void task.then(cleanup, cleanup);
   return task;
+}
+
+// Chỉ thử lại GET (không tác động dữ liệu) khi lỗi mạng thoáng qua/503.
+// Tuyệt đối không thử lại POST/PUT để tránh tạo đơn hoặc thu tiền hai lần.
+// Không thử lại khi request đã timeout 15–30 giây, tránh dồn tải lên SQL Server.
+async function requestReadWithRetry<T>(path: string, init?: RequestInit): Promise<T> {
+  try {
+    return await requestOnce<T>(path, init);
+  } catch (error) {
+    if (!(error instanceof ApiError) ||
+        (error.status !== 0 && ![502, 503, 504].includes(error.status)) ||
+        /phản hồi quá chậm|đã bị hủy/i.test(error.message)) {
+      throw error;
+    }
+
+    if (import.meta.env.DEV) {
+      console.warn("[API retry] GET", path.split("?")[0], "after a transient error");
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    return requestOnce<T>(path, init);
+  }
 }
 
 async function requestOnce<T>(path: string, init?: RequestInit): Promise<T> {

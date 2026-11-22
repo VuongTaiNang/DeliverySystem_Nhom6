@@ -1,0 +1,59 @@
+.my-complaints { max-width: 1050px; }
+.my-complaints__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.my-complaints__list { display: grid; gap: 20px; }
+.my-complaints__empty { padding: 28px; background: white; border: 1px dashed #dce5dd; border-radius: 14px; }
+.complaint-card {
+  background: #fff;
+  border: 1px solid #e0e9e1;
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: 0 6px 18px rgba(23, 63, 49, .05);
+  overflow-wrap: anywhere;
+}
+.complaint-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #edf1ea;
+}
+.complaint-card__header h3 { font-size: 17px; margin: 0 0 8px; color: #153f30; }
+.complaint-card__order { color: #62796a; font-size: 12px; margin: 0; }
+.complaint-status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.complaint-status--pending { color: #8b651b; background: #fff2d8; }
+.complaint-status--processing { color: #345b87; background: #eaf1fa; }
+.complaint-status--resolved { color: #216744; background: #e4f4e8; }
+.complaint-card__details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 20px;
+  margin: 18px 0;
+}
+.complaint-card__details div { min-width: 0; }
+.complaint-card__details dt { font-size: 11px; font-weight: 600; color: #6a7c70; margin-bottom: 6px; }
+.complaint-card__details dd { margin: 0; font-size: 13px; line-height: 1.7; color: #294739; white-space: pre-wrap; }
+.complaint-card__full { grid-column: 1 / -1; }
+.complaint-card__resolution { border-left: 3px solid #58a274; background: #f3faf5; padding: 12px 16px; border-radius: 6px; }
+.complaint-card__footer { padding-top: 2px; }
+.complaint-card__history-button { border-color: #cbdacf; }
+.complaint-card__timeline { margin-top: 18px; border-top: 1px solid #edf1ea; padding-top: 14px; }
+@media (max-width: 660px) {
+  .complaint-card { padding: 16px; }
+  .complaint-card__details { grid-template-columns: 1fr; }
+  .complaint-card__full { grid-column: auto; }
+}

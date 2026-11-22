@@ -3,6 +3,7 @@ import { api, INCIDENT_STATUSES, typeLabel } from "./api";
 import type { Incident } from "./api";
 import ComplaintTimeline from "./ComplaintTimeline";
 import { formatVietnamDateTime } from "./lib/dateTime";
+import "./MyComplaints.css";
 
 export default function MyComplaints() {
   const [items, setItems] = useState<Incident[]>([]);
@@ -14,36 +15,67 @@ export default function MyComplaints() {
     let active = true;
     api
       .listMyComplaints()
-      .then((d) => active && setItems(d))
-      .catch((e) => active && setError(e instanceof Error ? e.message : "Không tải được danh sách khiếu nại."))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
+      .then((data) => { if (active) setItems(data); })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Không tải được danh sách khiếu nại.");
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
-  if (loading) return <p>Đang tải...</p>;
+  if (loading) return <p role="status">Đang tải khiếu nại…</p>;
   if (error) return <p role="alert" className="error">{error}</p>;
-  if (items.length === 0) return <p>Bạn chưa có khiếu nại nào.</p>;
 
   return (
-    <section>
-      <h2>Khiếu nại của tôi</h2>
-      {items.map((c) => (
-        <article key={c.id} className="card">
-          <header>
-            <strong>#{c.id} · Đơn {c.shipmentId}</strong>
-            <span className={`badge badge-${c.status}`}>{INCIDENT_STATUSES[c.status]}</span>
-          </header>
-          <p>{typeLabel(c.type)} · {formatVietnamDateTime(c.createdAt)}</p>
-          <p>{c.content}</p>
-          {c.response && <p><b>Kết quả xử lý:</b> {c.response}</p>}
-          <button type="button" onClick={() => setOpenId(openId === c.id ? null : c.id)}>
-            {openId === c.id ? "Ẩn lịch sử" : "Xem lịch sử xử lý"}
-          </button>
-          {openId === c.id && <ComplaintTimeline complaintId={c.id} />}
-        </article>
-      ))}
+    <section className="my-complaints">
+      <div className="my-complaints__heading">
+        <h2>Danh sách khiếu nại</h2>
+        <span className="muted">{items.length} khiếu nại</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="my-complaints__empty">Bạn chưa có khiếu nại nào.</p>
+      ) : (
+        <div className="my-complaints__list">
+          {items.map((complaint) => (
+            <article key={complaint.id} className="complaint-card">
+              <header className="complaint-card__header">
+                <div>
+                  <h3>Khiếu nại #{complaint.id}</h3>
+                  <p className="complaint-card__order">Mã vận đơn: {complaint.shipmentId}</p>
+                </div>
+                <span className={"complaint-status complaint-status--" + complaint.status}>
+                  {INCIDENT_STATUSES[complaint.status] ?? "Chưa xác định"}
+                </span>
+              </header>
+              <dl className="complaint-card__details">
+                <div><dt>Loại khiếu nại</dt><dd>{typeLabel(complaint.type)}</dd></div>
+                <div><dt>Ngày gửi</dt><dd>{formatVietnamDateTime(complaint.createdAt)}</dd></div>
+                <div className="complaint-card__full"><dt>Mô tả</dt><dd>{complaint.content}</dd></div>
+                {complaint.response && (
+                  <div className="complaint-card__resolution complaint-card__full">
+                    <dt>Kết quả xử lý</dt><dd>{complaint.response}</dd>
+                  </div>
+                )}
+              </dl>
+              <div className="complaint-card__footer">
+                <button
+                  type="button"
+                  className="complaint-card__history-button"
+                  aria-expanded={openId === complaint.id}
+                  onClick={() => setOpenId(openId === complaint.id ? null : complaint.id)}
+                >
+                  {openId === complaint.id ? "Ẩn lịch sử xử lý" : "Xem lịch sử xử lý"}
+                </button>
+              </div>
+              {openId === complaint.id && (
+                <div className="complaint-card__timeline">
+                  <ComplaintTimeline complaintId={complaint.id} />
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

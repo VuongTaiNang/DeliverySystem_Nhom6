@@ -72,7 +72,7 @@ export default function VnPayPanel({
   return (
     <section className="panel" aria-label="Thanh toán VNPay">
       <h3>Thanh toán phí vận chuyển bằng VNPay</h3>
-      <p className="muted">Chỉ thanh toán khi bạn đã tạo đơn hàng. Trạng thái được xác nhận từ Backend.</p>
+      
       {status && (
         <p role="status">
           Trạng thái: {status === "paid" ? "Đã thanh toán" : status === "pending" ? "Đang chờ thanh toán" : status === "failed" ? "Thanh toán thất bại" : status}
@@ -108,7 +108,7 @@ export default function VnPayPanel({
         </button>
       )}
       {status === "pending" && !paymentUrl && (
-        <p className="muted">Giao dịch đang chờ. Nếu bạn đã đóng trang VNPay, hãy kiểm tra trạng thái. Nếu vẫn pending, Backend cần hỗ trợ lấy lại URL hoặc xử lý giao dịch hết hạn.</p>
+        <p className="muted">Giao dịch đang chờ. Nếu bạn đã đóng trang VNPay, hãy chọn “Kiểm tra trạng thái thanh toán” để cập nhật kết quả.</p>
       )}
     </section>
   );

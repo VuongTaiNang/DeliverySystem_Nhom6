@@ -122,7 +122,9 @@ namespace Back_DeliverySystem
                                     UriKind.Absolute,
                                     out var uri
                                 ) &&
-                                uri.Host == "localhost"
+                                uri.IsLoopback &&
+                                (uri.Scheme == Uri.UriSchemeHttp ||
+                                 uri.Scheme == Uri.UriSchemeHttps)
                             )
                             .AllowCredentials()
                             .AllowAnyHeader()
@@ -205,6 +207,30 @@ namespace Back_DeliverySystem
             // CONTROLLERS
             // =====================================================
             app.MapControllers();
+
+            // Chẩn đoán API và SQL Server độc lập. Không trả thông tin kết nối.
+            // GET /api/v1/health: 200 khi DB sẵn sàng, 503 khi SQL Server lỗi.
+            app.MapGet("/api/v1/health", async (AppDbContext db, HttpContext context) =>
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+                    context.RequestAborted);
+                timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                try
+                {
+                    var ready = await db.Database.CanConnectAsync(timeout.Token);
+                    return ready
+                        ? Results.Ok(new { status = "ok", database = "connected" })
+                        : Results.Json(new { status = "degraded", database = "unavailable" }, statusCode: 503);
+                }
+                catch (Exception exception) when (
+                    exception is not OperationCanceledException ||
+                    !context.RequestAborted.IsCancellationRequested)
+                {
+                    return Results.Json(
+                        new { status = "degraded", database = "unavailable" },
+                        statusCode: 503);
+                }
+            });
 
 
             // =====================================================

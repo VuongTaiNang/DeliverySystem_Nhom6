@@ -101,10 +101,19 @@ public static class Sprint3SeedData
             }
         };
 
+        // Một truy vấn lấy mã khu vực đã có, thay vì gửi 10 truy vấn AnyAsync
+        // mỗi lần khởi động Backend (SQL Server có thể còn đang làm nóng).
+        var areaCodes = areas.Select(area => area.Code).ToArray();
+        var existingCodes = (await context.Areas
+                .AsNoTracking()
+                .Where(area => areaCodes.Contains(area.Code))
+                .Select(area => area.Code)
+                .ToListAsync())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         foreach (var area in areas)
         {
-            var existed = await context.Areas.AnyAsync(x => x.Code == area.Code);
-            if (!existed)
+            if (!existingCodes.Contains(area.Code))
             {
                 context.Areas.Add(area);
             }

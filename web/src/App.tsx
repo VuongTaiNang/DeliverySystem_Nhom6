@@ -1,10 +1,12 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { api, money, STATUS, EVENT_STATUS } from "./api";
 import type { PickupLocation, Quote, ServiceArea, Shipment, ShipmentInput } from "./api";
 import "./App.css";
 import IncidentPanel from "./IncidentPanel";
 import MyComplaints from "./MyComplaints";
+import ApiConnectionStatus from "./ApiConnectionStatus";
+import CustomerRating from "./CustomerRating";
 import StaffSprint2 from "./StaffSprint2";
 import VnPayPanel from "./VnPayPanel";
 import PaymentResultPage from "./PaymentResultPage";
@@ -391,6 +393,11 @@ function Badge({ shipment }: {
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("");
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [shipmentsLoadError, setShipmentsLoadError] = useState("");
+    const [shipmentsReloadKey, setShipmentsReloadKey] = useState(0);
+    const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+    const [detailError, setDetailError] = useState("");
+    const detailRequestRef = useRef(0);
     
     
     const [notice, setNotice] = useState<Notice | null>(null);
@@ -451,6 +458,7 @@ function Badge({ shipment }: {
       useEffect(() => {
   if (!user || !shouldLoadSharedShipments) {
     setShipments([]);
+    setShipmentsLoadError("");
     setLoading(false);
     return;
   }
@@ -461,22 +469,20 @@ function Badge({ shipment }: {
   let active = true;
 
   setLoading(true);
+  setShipmentsLoadError("");
 
   api.list()
     .then((data) => {
       if (active) {
         setShipments(data);
+        setShipmentsLoadError("");
       }
     })
     .catch((error: unknown) => {
       if (active) {
-        setNotice({
-          kind: "error",
-          text:
-            error instanceof Error
-              ? error.message
-              : "Không tải được dữ liệu.",
-        });
+        // Không nhầm lỗi máy chủ với danh sách thật sự không có đơn.
+        // Giữ lại dữ liệu cũ để người dùng có thể thử lại.
+        setShipmentsLoadError(error instanceof Error ? error.message : "Không tải được danh sách đơn hàng.");
       }
     })
     .finally(() => {
@@ -488,7 +494,7 @@ function Badge({ shipment }: {
   return () => {
     active = false;
   };
-}, [user, normalizedRole, shouldLoadSharedShipments]);
+}, [user, normalizedRole, shouldLoadSharedShipments, shipmentsReloadKey]);
       
       useEffect(() => {
         if (!user || user.role !== "customer") {
@@ -564,7 +570,7 @@ function Badge({ shipment }: {
                     ? current.map((item) => item.id === shipment.id ? shipment : item)
                     : [shipment, ...current];
             });
-            openShipment(shipment);
+            openShipment(shipment, true);
         });
     }
     async function run(action: () => Promise<void>) {
@@ -613,10 +619,32 @@ function Badge({ shipment }: {
         });
         setQuote(null);
     }
-    function openShipment(shipment: Shipment) {
+    function openShipment(shipment: Shipment, detailsAlreadyLoaded = false) {
         setSelectedId(shipment.id);
-        
-        
+        setDetailError("");
+        const requestId = ++detailRequestRef.current;
+        if (detailsAlreadyLoaded) {
+            setDetailLoadingId(null);
+            return;
+        }
+        setDetailLoadingId(shipment.id);
+        void api.getShipment(shipment.id)
+          .then((detail) => {
+            if (requestId !== detailRequestRef.current) return;
+            setShipments((current) => {
+                const exists = current.some((item) => item.id === detail.id);
+                return exists
+                  ? current.map((item) => item.id === detail.id ? detail : item)
+                  : [detail, ...current];
+            });
+          })
+          .catch((error: unknown) => {
+            if (requestId !== detailRequestRef.current) return;
+            setDetailError(error instanceof Error ? error.message : "Không tải được chi tiết vận đơn.");
+          })
+          .finally(() => {
+            if (requestId === detailRequestRef.current) setDetailLoadingId(null);
+          });
     }
     function submitQuote(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -685,8 +713,8 @@ function Badge({ shipment }: {
             <div>
               <p className="eyebrow">
                   {user
-                    ? "EXPRESS / WORKSPACE"
-                    : "EXPRESS / DELIVERY"}
+                    ? "EXPRESS / KHÔNG GIAN LÀM VIỆC"
+                    : "EXPRESS / GIAO HÀNG"}
                 </p>
 
                 <h1>{titles[page]}</h1>
@@ -1218,7 +1246,14 @@ function Badge({ shipment }: {
                 </select>
               </div>
 
-              {loading ? (<p role="status">Đang tải đơn hàng…</p>) : filtered.length === 0 ? (<div className="empty">
+              {shipmentsLoadError && (
+                <div className="notice error" role="alert">
+                  <p>Không thể cập nhật danh sách đơn hàng: {shipmentsLoadError}</p>
+                  <button type="button" onClick={() => setShipmentsReloadKey((value) => value + 1)}>Thử tải lại</button>
+                </div>
+              )}
+              {loading && shipments.length === 0 ? (<p role="status">Đang tải đơn hàng…</p>) :
+               shipmentsLoadError && shipments.length === 0 ? null : filtered.length === 0 ? (<div className="empty">
                   <h3>Không có đơn hàng phù hợp</h3>
                   <p>Thử từ khóa khác hoặc tạo đơn hàng đầu tiên.</p>
                 </div>) : (<div className="table-scroll">
@@ -1293,13 +1328,29 @@ function Badge({ shipment }: {
                 COD đã thu: {money(selected.codCollected)}
               </p>
 
-              <ol className="timeline">
-                {selected.events.map((event, index) => (<li key={`${event.at}-${index}`}>
-                    <strong>{EVENT_STATUS[event.status] || event.status}</strong>
-                    <time>{new Date(event.at).toLocaleString("vi-VN")}</time>
-                    {event.note && <p>{event.note}</p>}
-                  </li>))}
-              </ol>
+              {detailLoadingId === selected.id ? (
+                <p role="status">Đang tải lịch sử vận chuyển…</p>
+              ) : detailError ? (
+                <div className="notice error" role="alert">
+                  <p>{detailError}</p>
+                  <button type="button" onClick={() => openShipment(selected)}>Thử tải lại chi tiết</button>
+                </div>
+              ) : (
+                <ol className="timeline">
+                  {selected.events.length === 0 && <li>Chưa có sự kiện vận chuyển.</li>}
+                  {selected.events.map((event, index) => (
+                    <li key={event.at + "-" + index}>
+                      <strong>{EVENT_STATUS[event.status] || event.status.replaceAll("_", " ")}</strong>
+                      <time>{new Date(event.at).toLocaleString("vi-VN")}</time>
+                      {event.note && <p>{event.note}</p>}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {normalizedRole === "customer" && selected.status === "delivered" &&
+                detailLoadingId !== selected.id && !detailError && (
+                  <CustomerRating key={selected.id} shipmentId={selected.id} />
+              )}
               
               <IncidentPanel key={selected.id} shipmentId={selected.id}/>
               {normalizedRole === "customer" && (
@@ -1432,9 +1483,7 @@ function Badge({ shipment }: {
                       {user.name}
                     </button>
 
-                    <span className="environment">
-                      ● Kết nối API
-                    </span>
+                    <ApiConnectionStatus />
 
                     <button
                       type="button"
