@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import ApiConnectionStatus from "./ApiConnectionStatus";
 
 /** Shared Operations shell. Business screens are owned by the respective feature teams. */
 export type OperationsSection = "dashboard" | "orders" | "routes" | "areas" | "staff" | "tracking" | "incidents" | "ratings" | "settlements";
@@ -101,6 +102,7 @@ export function OperationsHeader({
         <span>{operationsItems.find((item) => item.key === currentSection)?.title}</span>
       </div>
       <div className="account-controls">
+        <ApiConnectionStatus />
         <span className="operations-username" title={userName}>{userName}</span>
         <button type="button" onClick={onLogout} disabled={signingOut}>
           {signingOut ? "Đang thoát…" : "Đăng xuất"}
