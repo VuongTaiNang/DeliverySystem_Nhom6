@@ -682,8 +682,8 @@ function Badge({ shipment }: {
             <div>
               <p className="eyebrow">
                   {user
-                    ? "EXPRESS / WORKSPACE"
-                    : "EXPRESS / DELIVERY"}
+                    ? "EXPRESS / KHÔNG GIAN LÀM VIỆC"
+                    : "EXPRESS / GIAO HÀNG"}
                 </p>
 
                 <h1>{titles[page]}</h1>
